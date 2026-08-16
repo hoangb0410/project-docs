@@ -29,3 +29,13 @@ Lý thuyết ngắn về scope của provider trong NestJS và các vector gây 
 - [4. Memory leak trong thế giới singleton — 4 vector](NESTJS-SCOPE.md#4-memory-leak-trong-thế-giới-singleton--4-vector)
 - [5. Cần context theo request mà không muốn trả giá Request scope?](NESTJS-SCOPE.md#5-cần-context-theo-request-mà-không-muốn-trả-giá-request-scope)
 - [Tóm tắt phỏng vấn (30 giây)](NESTJS-SCOPE.md#tóm-tắt-phỏng-vấn-30-giây)
+
+### 3. [Transactional Outbox & Change Data Capture (CDC)](TRANSACTIONAL-OUTBOX-AND-CDC.md)
+
+Hai kỹ thuật đảm bảo data consistency khi một service phải vừa ghi DB vừa phát event, kèm ví dụ thực tế từ module `venue-registry` của nollie-api.
+
+- [1. Bài toán gốc: Dual-Write Problem](TRANSACTIONAL-OUTBOX-AND-CDC.md#1-bài-toán-gốc-dual-write-problem)
+- [2. Transactional Outbox Pattern](TRANSACTIONAL-OUTBOX-AND-CDC.md#2-transactional-outbox-pattern)
+- [3. Change Data Capture (CDC)](TRANSACTIONAL-OUTBOX-AND-CDC.md#3-change-data-capture-cdc)
+- [4. So sánh nhanh](TRANSACTIONAL-OUTBOX-AND-CDC.md#4-so-sánh-nhanh)
+- [5. Đọc thêm trong repo](TRANSACTIONAL-OUTBOX-AND-CDC.md#5-đọc-thêm-trong-repo)
