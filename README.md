@@ -49,3 +49,16 @@ Lý thuyết về bảo vệ dữ liệu cá nhân (PII): tại sao phải mã h
 - [3. Chi tiết AES-256-CBC](PII-ENCRYPTION-THEORY.md#3-chi-tiết-aes-256-cbc)
 - [4. Search trên dữ liệu mã hóa — Blind Index](PII-ENCRYPTION-THEORY.md#4-search-trên-dữ-liệu-mã-hóa--blind-index)
 - [5. Tổng kết](PII-ENCRYPTION-THEORY.md#5-tổng-kết)
+
+### 5. [Concurrency Control — Xử lý Race Condition & Đảm bảo Toàn vẹn Dữ liệu](RACE-CONDITION-HANDBOOK.md)
+
+Các cơ chế kiểm soát đồng thời (locking, optimistic/pessimistic, v.v.) và cách chọn; ví dụ từ bài toán booking, case study nollie-api.
+
+- [1. Nguyên lý cốt lõi](RACE-CONDITION-HANDBOOK.md#1-nguyên-lý-cốt-lõi)
+- [2. Tổng quan các cơ chế kiểm soát đồng thời](RACE-CONDITION-HANDBOOK.md#2-tổng-quan-các-cơ-chế-kiểm-soát-đồng-thời)
+- [3. Phân tích chi tiết từng cơ chế](RACE-CONDITION-HANDBOOK.md#3-phân-tích-chi-tiết-từng-cơ-chế)
+- [4. Tiêu chí lựa chọn cơ chế](RACE-CONDITION-HANDBOOK.md#4-tiêu-chí-lựa-chọn-cơ-chế)
+- [5. Các lỗi thiết kế thường gặp](RACE-CONDITION-HANDBOOK.md#5-các-lỗi-thiết-kế-thường-gặp)
+- [6. Case study: booking engine của nollie-api](RACE-CONDITION-HANDBOOK.md#6-case-study-booking-engine-của-nollie-api)
+- [7. Mẫu trả lời phỏng vấn — scenario "N client tranh 1 bàn cuối"](RACE-CONDITION-HANDBOOK.md#7-mẫu-trả-lời-phỏng-vấn--scenario-n-client-tranh-1-bàn-cuối)
+- [8. Checklist khi review code](RACE-CONDITION-HANDBOOK.md#8-checklist-khi-review-code)
