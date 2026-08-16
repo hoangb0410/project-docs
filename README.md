@@ -39,3 +39,13 @@ Hai kỹ thuật đảm bảo data consistency khi một service phải vừa gh
 - [3. Change Data Capture (CDC)](TRANSACTIONAL-OUTBOX-AND-CDC.md#3-change-data-capture-cdc)
 - [4. So sánh nhanh](TRANSACTIONAL-OUTBOX-AND-CDC.md#4-so-sánh-nhanh)
 - [5. Đọc thêm trong repo](TRANSACTIONAL-OUTBOX-AND-CDC.md#5-đọc-thêm-trong-repo)
+
+### 4. [Mã hóa dữ liệu PII & Search trên dữ liệu mã hóa](PII-ENCRYPTION-THEORY.md)
+
+Lý thuyết về bảo vệ dữ liệu cá nhân (PII): tại sao phải mã hóa, lựa chọn thuật toán, AES-256-CBC, và search trên dữ liệu đã mã hóa với blind index.
+
+- [1. Vấn đề](PII-ENCRYPTION-THEORY.md#1-vấn-đề)
+- [2. Có những lựa chọn thuật toán nào?](PII-ENCRYPTION-THEORY.md#2-có-những-lựa-chọn-thuật-toán-nào)
+- [3. Chi tiết AES-256-CBC](PII-ENCRYPTION-THEORY.md#3-chi-tiết-aes-256-cbc)
+- [4. Search trên dữ liệu mã hóa — Blind Index](PII-ENCRYPTION-THEORY.md#4-search-trên-dữ-liệu-mã-hóa--blind-index)
+- [5. Tổng kết](PII-ENCRYPTION-THEORY.md#5-tổng-kết)
