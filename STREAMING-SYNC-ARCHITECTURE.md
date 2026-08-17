@@ -28,30 +28,69 @@ Toàn bộ phần còn lại của tài liệu là hiện thực hóa kỹ thu�
 
 Thay vì một vòng lặp tuần tự "fetch trang → ghi DB → fetch trang tiếp theo", pipeline tách thành ba tầng độc lập — **điều phối (fan-out) → thu thập song song → xử lý theo lô (fan-in)** — nối với nhau bằng buffer trung gian (Redis list) và bộ đếm tiến độ atomic, sao cho tốc độ fetch API và tốc độ ghi DB không còn ràng buộc lẫn nhau.
 
-```
-COORDINATOR (1 job)
-  │  gọi trang 1 → đọc TotalRows → tính tổng số trang
-  │  addBulk N job fetch, theo từng đợt (wave) ≤ 2000 trang
-  ▼
-FETCH_PAGE (song song, concurrency ~20)
-  │  mỗi job: fetch 1 trang (100 record) → LPUSH JSON thô vào Redis buffer
-  │  đánh dấu "trang n đã fetch" (SETEX) để retry không fetch lại
-  ▼
-Redis list  job:{id}:customerBuffer          ← điểm tách rời fetch / ghi
-  │  drain thích ứng: gom 1–5 trang thành một lô
-  ▼
-PROCESS_BATCH (song song, concurrency ~25)
-  │  bulk upsert idempotent trong một transaction
-  │  Lua script tăng bộ đếm processed atomic
-  ▼
-Đạt ngưỡng hoàn thành (95% tổng số record)
-  → chuyển phase kế tiếp (booking sync → merge → report)
+```mermaid
+flowchart TD
+    S["Service: sync bắt đầu<br/>fetch trang 1 → đọc TotalRows<br/>→ tính totalPages"]
+    S -->|"add 1 job COORDINATOR"| C
+
+    C["COORDINATOR (1 job duy nhất)<br/>vòng for tạo N job fetch, mỗi job ứng 1 trang<br/>addBulk theo đợt (wave) ≤ 2000"]
+    C -->|"N phiếu: data = {pageNumber}"| Q
+
+    Q[("Hàng đợi fetch (Bull/Redis)<br/>N job FETCH_PAGE xếp hàng chờ")]
+
+    Q -->|"nhặt tối đa 20 job cùng lúc"| W1
+
+    subgraph W["FETCH_PAGE — concurrency ~20 (1 process, các lượt chạy xen kẽ theo I/O)"]
+        W1["1. gọi API lấy trang N (100 record)"]
+        W2["2. LPUSH JSON thô vào buffer"]
+        W3["3. SETEX page:N:fetched (idempotent)"]
+        W4{"4. LLEN buffer ≥ ngưỡng?<br/>(drain thích ứng: 1 / 2 / 3 trang tùy giai đoạn)"}
+        W1 --> W2 --> W3 --> W4
+    end
+
+    W2 -.->|LPUSH| B[("Redis list — buffer trung gian<br/>điểm tách rời fetch / ghi<br/>mỗi phần tử = 1 trang JSON")]
+
+    W4 -->|"chưa đủ ngưỡng"| E["kết thúc job<br/>Bull nhặt phiếu kế tiếp từ hàng đợi"]
+    W4 -->|"đủ ngưỡng"| L
+
+    L{"giành lock buffer?"}
+    L -->|"trượt → lượt khác đang xúc, bỏ qua"| E
+    L -->|"có lock"| P["LPOP tối đa 5 trang, gộp + dedup theo Id<br/>batchId = hash(danh sách Id)<br/>SETNX chống tạo lô trùng"]
+    B -.->|LPOP| P
+
+    P -->|"add job chứa ~500 record thật"| Q2
+
+    Q2[("Hàng đợi batch")]
+    Q2 -->|"concurrency ~25"| U["PROCESS_BATCH<br/>bulk upsert idempotent trong 1 transaction<br/>Lua script tăng bộ đếm processed atomic"]
+    U --> DB[(Database)]
+    U --> T{"processed ≥ 95% totalRows?"}
+    T -->|"đủ"| NEXT["chuyển phase kế tiếp<br/>(booking sync → merge → report)"]
+
+    C -->|"add job delay 30s"| CL["FINAL_BUFFER_CLEANUP<br/>vét trang lẻ còn sót trong buffer"]
+    CL -.-> B
 ```
 
 Hai job "chốt sổ" bảo đảm pipeline luôn kết thúc được:
 
 - **FINAL_BUFFER_CLEANUP** (delay 30 giây, retry nhiều lần): vét những trang còn sót trong buffer sau khi mọi job fetch đã xong.
 - **FORCE_COMPLETE_IMPORT**: chấp nhận hoàn thành khi phần thiếu hụt nhỏ hơn cả ngưỡng tuyệt đối (< 1000 record) lẫn ngưỡng tương đối (< 5%), thay vì treo vô hạn để chờ đủ 100%.
+
+### 2.1. Danh mục job và vòng đời
+
+Nguyên tắc chung: một job kết thúc **ngay khi hàm xử lý của nó return** — không job nào đứng chờ job khác hay chờ DB. Handler `throw` nghĩa là "chưa xong, thử lại"; riêng job fetch ở lần thử cuối **cố tình return thay vì throw** (ghi trang hỏng vào sổ) để một trang lỗi không chặn cả phiên. Job đã xong/đã hỏng không bị xóa ngay — Bull giữ lại trong Redis một thời gian để tra cứu, rồi tự dọn theo tuổi hoặc số lượng.
+
+| Job | Nhiệm vụ | Kết thúc khi | Dọn khỏi Redis |
+|---|---|---|---|
+| `COORDINATOR` (×1) | Đọc tổng số trang, phát N phiếu fetch theo wave, hẹn giờ job vét buffer | Phát hết phiếu | Mặc định: xong giữ 2h, hỏng giữ 24h |
+| `FETCH_PAGE` (×N) | Fetch 1 trang → đẩy vào buffer → kiểm tra ngưỡng | Return sau khi push (và có thể xúc buffer); retry 2 lần, lần cuối lỗi thì return + ghi sổ trang hỏng | Ngắn hơn hẳn: xong giữ 30 phút / tối đa 100 job (vì số lượng cực lớn), hỏng giữ 24h |
+| `PROCESS_BATCH` | Bulk upsert ~500 record trong 1 transaction, tăng bộ đếm atomic, tự kiểm tra ngưỡng 95% | Commit + tăng đếm xong; lỗi thì throw, retry 3 lần (2s/4s/8s) | Xong giữ 2h, hỏng giữ 24h |
+| `FINAL_BUFFER_CLEANUP` (×1) | 30 giây sau khi phát hết phiếu: vét trang lẻ còn trong buffer | Buffer sạch hoặc kích hoạt force-complete; retry 5 lần, cách nhau 60s | Xong giữ 2h |
+| `FORCE_COMPLETE_IMPORT` | Đóng phiên khi phần thiếu < 1000 record và < 5% | Cập nhật trạng thái hoàn tất | **Xóa ngay khi xong** (`removeOnComplete: true`) |
+| `TRIGGER_BOOKING_SYNC_PHASE` / `TRIGGER_MERGE_PHASE` | Chuyển phase (ưu tiên cao, nhảy hàng) | Kích hoạt phase xong; throw để retry nếu lỗi | Mặc định 2h / 24h |
+| `SEND_INTEGRATION_REPORT` | Gửi báo cáo tổng kết phiên sync | Gửi xong | Mặc định 2h / 24h |
+| `CLEANUP_INTEGRATION_QUEUES` (×1) | 2 giờ sau khi sync xong: quét sạch mọi job completed còn sót trên cả các queue liên quan | Quét xong | — (chính nó là chốt dọn dẹp cuối) |
+
+Hai tầng dọn dẹp bổ trợ nhau: tầng thứ nhất là cấu hình `removeOnComplete`/`removeOnFail` trên từng job (tự hết hạn theo tuổi/số lượng — job fetch được đặt tuổi ngắn vì một phiên lớn sinh hàng chục nghìn job); tầng thứ hai là job cleanup hẹn giờ quét tổng sau phiên, đề phòng cấu hình tầng một bỏ sót. Job **hỏng** luôn được giữ lâu hơn job xong (24h so với 2h/30 phút) — đó là dấu vết để debug.
 
 ---
 
