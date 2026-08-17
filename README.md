@@ -95,3 +95,18 @@ Kiến thức Redis nền tảng cho backend: các cấu trúc dữ liệu và l
 - [6. Duyệt keyspace: SCAN, không bao giờ KEYS](REDIS-GUIDE.md#6-duyệt-keyspace-scan-không-bao-giờ-keys)
 - [7. Các pattern thực chiến](REDIS-GUIDE.md#7-các-pattern-thực-chiến)
 - [8. Checklist thực dụng khi thêm một key Redis mới](REDIS-GUIDE.md#8-checklist-thực-dụng-khi-thêm-một-key-redis-mới)
+
+### 9. [Stripe — Lý thuyết cốt lõi và tra cứu SDK](STRIPE-GUIDE.md)
+
+Lý thuyết Stripe cho backend: nền tảng API, SDK stripe-node, các object thanh toán, Checkout Session, Connect, Billing/Subscription, webhook và các pattern thiết kế xuyên suốt.
+
+- [1. Stripe là gì — mô hình trong một câu](STRIPE-GUIDE.md#1-stripe-là-gì--mô-hình-trong-một-câu)
+- [2. Nền tảng API](STRIPE-GUIDE.md#2-nền-tảng-api)
+- [3. SDK (stripe-node) — khởi tạo và quy ước gọi](STRIPE-GUIDE.md#3-sdk-stripe-node--khởi-tạo-và-quy-ước-gọi)
+- [4. Các object thanh toán và method chính](STRIPE-GUIDE.md#4-các-object-thanh-toán-và-method-chính)
+- [5. Checkout Session — trang thanh toán do Stripe host](STRIPE-GUIDE.md#5-checkout-session--trang-thanh-toán-do-stripe-host)
+- [6. Stripe Connect — thu tiền hộ người khác](STRIPE-GUIDE.md#6-stripe-connect--thu-tiền-hộ-người-khác)
+- [7. Billing — Subscription và họ hàng](STRIPE-GUIDE.md#7-billing--subscription-và-họ-hàng)
+- [8. Webhook — kênh sự thật từ Stripe về](STRIPE-GUIDE.md#8-webhook--kênh-sự-thật-từ-stripe-về)
+- [9. Các pattern thiết kế xuyên suốt](STRIPE-GUIDE.md#9-các-pattern-thiết-kế-xuyên-suốt)
+- [10. Checklist khi thêm một thao tác Stripe mới](STRIPE-GUIDE.md#10-checklist-khi-thêm-một-thao-tác-stripe-mới)
