@@ -82,3 +82,16 @@ Mẫu thiết kế nhập dữ liệu lớn từ API bên thứ ba có phân tra
 - [3. Các kỹ thuật thành phần đáng tái sử dụng](STREAMING-SYNC-ARCHITECTURE.md#3-các-kỹ-thuật-thành-phần-đáng-tái-sử-dụng)
 - [4. So sánh với mô hình tuần tự page-by-page](STREAMING-SYNC-ARCHITECTURE.md#4-so-sánh-với-mô-hình-tuần-tự-page-by-page)
 - [5. Cái giá phải trả — nhìn thẳng vào trade-off](STREAMING-SYNC-ARCHITECTURE.md#5-cái-giá-phải-trả--nhìn-thẳng-vào-trade-off)
+
+### 8. [Redis — Cấu trúc dữ liệu, lệnh và các pattern sử dụng thực tế](REDIS-GUIDE.md)
+
+Kiến thức Redis nền tảng cho backend: các cấu trúc dữ liệu và lệnh chính, ba cấp độ atomic, Lua script, SCAN vs KEYS, và các pattern thực chiến (cache, lock, counter, rate limit, pub/sub, queue).
+
+- [1. Redis là gì — mô hình trong một câu](REDIS-GUIDE.md#1-redis-là-gì--mô-hình-trong-một-câu)
+- [2. Vòng đời key và quy ước đặt tên](REDIS-GUIDE.md#2-vòng-đời-key-và-quy-ước-đặt-tên)
+- [3. Các cấu trúc dữ liệu và lệnh](REDIS-GUIDE.md#3-các-cấu-trúc-dữ-liệu-và-lệnh)
+- [4. Ba cấp độ atomic — lệnh đơn, Lua script, pipeline](REDIS-GUIDE.md#4-ba-cấp-độ-atomic--lệnh-đơn-lua-script-pipeline)
+- [5. Lua script trong Redis](REDIS-GUIDE.md#5-lua-script-trong-redis)
+- [6. Duyệt keyspace: SCAN, không bao giờ KEYS](REDIS-GUIDE.md#6-duyệt-keyspace-scan-không-bao-giờ-keys)
+- [7. Các pattern thực chiến](REDIS-GUIDE.md#7-các-pattern-thực-chiến)
+- [8. Checklist thực dụng khi thêm một key Redis mới](REDIS-GUIDE.md#8-checklist-thực-dụng-khi-thêm-một-key-redis-mới)
