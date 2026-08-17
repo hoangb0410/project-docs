@@ -62,3 +62,23 @@ Các cơ chế kiểm soát đồng thời (locking, optimistic/pessimistic, v.v
 - [6. Case study: booking engine của nollie-api](RACE-CONDITION-HANDBOOK.md#6-case-study-booking-engine-của-nollie-api)
 - [7. Mẫu trả lời phỏng vấn — scenario "N client tranh 1 bàn cuối"](RACE-CONDITION-HANDBOOK.md#7-mẫu-trả-lời-phỏng-vấn--scenario-n-client-tranh-1-bàn-cuối)
 - [8. Checklist khi review code](RACE-CONDITION-HANDBOOK.md#8-checklist-khi-review-code)
+
+### 6. [Concurrency Control — Lý thuyết và cách nollie-api áp dụng](CONCURRENCY-CONTROL.md)
+
+Pessimistic vs optimistic locking trong PostgreSQL (FOR UPDATE, advisory lock, version column), map vào codebase nollie-api và các bẫy thực tế.
+
+- [1. Vấn đề gốc: race condition](CONCURRENCY-CONTROL.md#1-vấn-đề-gốc-race-condition)
+- [2. Lý thuyết](CONCURRENCY-CONTROL.md#2-lý-thuyết)
+- [3. nollie-api đang dùng gì](CONCURRENCY-CONTROL.md#3-nollie-api-đang-dùng-gì)
+- [4. Bẫy thực tế (đã gặp hoặc dễ gặp trong repo này)](CONCURRENCY-CONTROL.md#4-bẫy-thực-tế-đã-gặp-hoặc-dễ-gặp-trong-repo-này)
+- [5. Checklist khi viết code mới có shared write](CONCURRENCY-CONTROL.md#5-checklist-khi-viết-code-mới-có-shared-write)
+
+### 7. [Kiến trúc Streaming Fan-out cho đồng bộ dữ liệu khối lượng lớn](STREAMING-SYNC-ARCHITECTURE.md)
+
+Mẫu thiết kế nhập dữ liệu lớn từ API bên thứ ba có phân trang: fan-out nhiều worker song song + hàng đợi trung gian + batch writer, đảm bảo nhanh, chịu lỗi và idempotent.
+
+- [1. Ý tưởng cốt lõi](STREAMING-SYNC-ARCHITECTURE.md#1-ý-tưởng-cốt-lõi)
+- [2. Mô hình tổng quát trong một câu](STREAMING-SYNC-ARCHITECTURE.md#2-mô-hình-tổng-quát-trong-một-câu)
+- [3. Các kỹ thuật thành phần đáng tái sử dụng](STREAMING-SYNC-ARCHITECTURE.md#3-các-kỹ-thuật-thành-phần-đáng-tái-sử-dụng)
+- [4. So sánh với mô hình tuần tự page-by-page](STREAMING-SYNC-ARCHITECTURE.md#4-so-sánh-với-mô-hình-tuần-tự-page-by-page)
+- [5. Cái giá phải trả — nhìn thẳng vào trade-off](STREAMING-SYNC-ARCHITECTURE.md#5-cái-giá-phải-trả--nhìn-thẳng-vào-trade-off)
