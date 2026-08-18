@@ -110,3 +110,28 @@ Lý thuyết Stripe cho backend: nền tảng API, SDK stripe-node, các object 
 - [8. Webhook — kênh sự thật từ Stripe về](STRIPE-GUIDE.md#8-webhook--kênh-sự-thật-từ-stripe-về)
 - [9. Các pattern thiết kế xuyên suốt](STRIPE-GUIDE.md#9-các-pattern-thiết-kế-xuyên-suốt)
 - [10. Checklist khi thêm một thao tác Stripe mới](STRIPE-GUIDE.md#10-checklist-khi-thêm-một-thao-tác-stripe-mới)
+
+### 10. [SendGrid — Lý thuyết cơ bản](SENDGRID-THEORY.md)
+
+Gửi email qua SendGrid: khái niệm nền tảng, setup domain/sender, các SDK Node.js, batch email với `personalizations`, event webhook và chuyện IP cho subuser.
+
+- [1. SendGrid là gì](SENDGRID-THEORY.md#1-sendgrid-là-gì)
+- [2. Ưu điểm so với SMTP tự vận hành](SENDGRID-THEORY.md#2-ưu-điểm-so-với-smtp-tự-vận-hành)
+- [3. Các khái niệm chính](SENDGRID-THEORY.md#3-các-khái-niệm-chính)
+- [4. Setup (tổng quát)](SENDGRID-THEORY.md#4-setup-tổng-quát)
+- [5. SDK Node.js](SENDGRID-THEORY.md#5-sdk-nodejs)
+  - `@sendgrid/mail` · `@sendgrid/client` · `@sendgrid/eventwebhook`
+- [6. Batch email — `personalizations`](SENDGRID-THEORY.md#6-batch-email--personalizations)
+- [7. Event Webhook](SENDGRID-THEORY.md#7-event-webhook)
+- [8. IP cho subuser & warm-up](SENDGRID-THEORY.md#8-ip-cho-subuser--warm-up)
+
+### 11. [NestJS Fundamental](NESTJS-FUNDAMENTAL.md)
+
+Ba nền tảng của NestJS: request đi qua những tầng nào, DI container hoạt động ra sao, và các design pattern mà framework dựng sẵn.
+
+- [Request Lifecycle](NESTJS-FUNDAMENTAL.md#request-lifecycle)
+  - Middleware · Guards · Interceptors (pre) · Pipes · Controller · Service · Interceptors (post) · Exception Filters
+- [Dependency Injection](NESTJS-FUNDAMENTAL.md#dependency-injection)
+  - Ba mảnh ghép · Các kiểu provider · Phạm vi module · Injection scope · Circular dependency · Vì sao DI làm test dễ hơn
+- [Design Patterns trong NestJS](NESTJS-FUNDAMENTAL.md#design-patterns-trong-nestjs)
+  - [Creational](NESTJS-FUNDAMENTAL.md#creational--tạo-ra-object) · [Structural](NESTJS-FUNDAMENTAL.md#structural--ghép-các-object-lại) · [Behavioral](NESTJS-FUNDAMENTAL.md#behavioral--điều-phối-luồng-và-giao-tiếp)
