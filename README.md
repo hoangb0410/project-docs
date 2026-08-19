@@ -135,3 +135,16 @@ Ba nền tảng của NestJS: request đi qua những tầng nào, DI container 
   - Ba mảnh ghép · Các kiểu provider · Phạm vi module · Injection scope · Circular dependency · Vì sao DI làm test dễ hơn
 - [Design Patterns trong NestJS](NESTJS-FUNDAMENTAL.md#design-patterns-trong-nestjs)
   - [Creational](NESTJS-FUNDAMENTAL.md#creational--tạo-ra-object) · [Structural](NESTJS-FUNDAMENTAL.md#structural--ghép-các-object-lại) · [Behavioral](NESTJS-FUNDAMENTAL.md#behavioral--điều-phối-luồng-và-giao-tiếp)
+
+### 12. [Các mô hình giao tiếp Real-time](REALTIME-COMMUNICATION.md)
+
+Bốn cách đưa dữ liệu từ server đến client: cơ chế, ví dụ Node.js tối giản, ví dụ thực tế trong nollie-api và tiêu chí chọn kỹ thuật.
+
+- [1. Short Polling](REALTIME-COMMUNICATION.md#1-short-polling)
+- [2. Long Polling](REALTIME-COMMUNICATION.md#2-long-polling)
+- [3. Server-Sent Events (SSE)](REALTIME-COMMUNICATION.md#3-server-sent-events-sse)
+- [4. WebSocket](REALTIME-COMMUNICATION.md#4-websocket)
+  - [Giao thức (RFC 6455)](REALTIME-COMMUNICATION.md#41-giao-thức-websocket-rfc-6455) · [Thư viện lo tới đâu](REALTIME-COMMUNICATION.md#41b-thư-viện-lo-tới-đâu-bạn-lo-từ-đâu) · [socket.io](REALTIME-COMMUNICATION.md#42-socketio--wrapper-là-cách-hiểu-gần-đúng-nhưng-thiếu-một-ý-quan-trọng) · [Ứng dụng phải tự lo gì](REALTIME-COMMUNICATION.md#43-những-gì-ứng-dụng-phải-tự-lo)
+- [Chọn kỹ thuật nào?](REALTIME-COMMUNICATION.md#chọn-kỹ-thuật-nào)
+- [Bảng so sánh nhanh](REALTIME-COMMUNICATION.md#bảng-so-sánh-nhanh)
+- [Bài học rút ra](REALTIME-COMMUNICATION.md#bài-học-rút-ra)
