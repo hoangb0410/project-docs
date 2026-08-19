@@ -148,3 +148,16 @@ Bốn cách đưa dữ liệu từ server đến client: cơ chế, ví dụ Nod
 - [Chọn kỹ thuật nào?](REALTIME-COMMUNICATION.md#chọn-kỹ-thuật-nào)
 - [Bảng so sánh nhanh](REALTIME-COMMUNICATION.md#bảng-so-sánh-nhanh)
 - [Bài học rút ra](REALTIME-COMMUNICATION.md#bài-học-rút-ra)
+
+### 13. [Đăng nhập OAuth với Google và Facebook](OAUTH-FLOWS.md)
+
+Ba luồng đăng nhập mạng xã hội — token flow, authorization code, authorization code + PKCE: cách hoạt động, chỗ dễ sai, so sánh và cách setup.
+
+- [Bối cảnh: 3 bên và bài toán cần giải](OAUTH-FLOWS.md#bối-cảnh-3-bên-và-bài-toán-cần-giải)
+- [1. Token flow](OAUTH-FLOWS.md#1-token-flow)
+- [2. Authorization code flow](OAUTH-FLOWS.md#2-authorization-code-flow)
+- [3. Authorization code + PKCE](OAUTH-FLOWS.md#3-authorization-code--pkce)
+- [So sánh](OAUTH-FLOWS.md#so-sánh)
+  - [Bảng đối chiếu](OAUTH-FLOWS.md#bảng-đối-chiếu) · [Chọn cái nào](OAUTH-FLOWS.md#chọn-cái-nào)
+- [Setup nếu triển khai authorization code](OAUTH-FLOWS.md#setup-nếu-triển-khai-authorization-code)
+  - [Google](OAUTH-FLOWS.md#google) · [Facebook](OAUTH-FLOWS.md#facebook) · [Backend](OAUTH-FLOWS.md#backend) · [Frontend](OAUTH-FLOWS.md#frontend)
