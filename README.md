@@ -161,3 +161,16 @@ Ba luồng đăng nhập mạng xã hội — token flow, authorization code, au
   - [Bảng đối chiếu](OAUTH-FLOWS.md#bảng-đối-chiếu) · [Chọn cái nào](OAUTH-FLOWS.md#chọn-cái-nào)
 - [Setup nếu triển khai authorization code](OAUTH-FLOWS.md#setup-nếu-triển-khai-authorization-code)
   - [Google](OAUTH-FLOWS.md#google) · [Facebook](OAUTH-FLOWS.md#facebook) · [Backend](OAUTH-FLOWS.md#backend) · [Frontend](OAUTH-FLOWS.md#frontend)
+
+### 14. [Availability & Table Allocator Engine — Tổng quan](AVAILABILITY-ALLOCATOR-OVERVIEW.md)
+
+Một engine tính availability duy nhất cho widget/staff/agent: tách đọc khỏi ghi, chống trùng booking bằng ràng buộc Postgres (GiST exclusion constraint + advisory lock + row lock), cache version-keyed ở tầng đọc.
+
+- [0. Bài toán & ý tưởng kiến trúc](AVAILABILITY-ALLOCATOR-OVERVIEW.md#0-bài-toán--ý-tưởng-kiến-trúc)
+- [1. Một engine chung cho mọi kênh](AVAILABILITY-ALLOCATOR-OVERVIEW.md#1-một-engine-chung-cho-mọi-kênh)
+- [2. Availability được tính như thế nào](AVAILABILITY-ALLOCATOR-OVERVIEW.md#2-availability-được-tính-như-thế-nào)
+- [3. Chọn bàn tự động — tightest fit](AVAILABILITY-ALLOCATOR-OVERVIEW.md#3-chọn-bàn-tự-động--tightest-fit)
+- [4. Flow hold → confirm (widget)](AVAILABILITY-ALLOCATOR-OVERVIEW.md#4-flow-hold--confirm-widget)
+- [5. Chống trùng booking giữa các kênh (điểm mấu chốt)](AVAILABILITY-ALLOCATOR-OVERVIEW.md#5-chống-trùng-booking-giữa-các-kênh-điểm-mấu-chốt)
+- [6. Hiệu năng tầng đọc](AVAILABILITY-ALLOCATOR-OVERVIEW.md#6-hiệu-năng-tầng-đọc)
+- [7. Closeout — hai mode](AVAILABILITY-ALLOCATOR-OVERVIEW.md#7-closeout--hai-mode)
