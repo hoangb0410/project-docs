@@ -187,3 +187,16 @@ Ba kiến trúc API phổ biến: thành phần cấu tạo, luồng giao tiếp
 - [4. gRPC](API_ARCHITECTURES.md#4-grpc)
   - Thành phần · Diagram giao tiếp · Ví dụ · Khi gọi, chuyện gì xảy ra · Ưu / nhược điểm · Khi dùng
 - [5. Chọn kiến trúc nào](API_ARCHITECTURES.md#5-chọn-kiến-trúc-nào)
+
+### 16. [Apache Kafka — từ khái niệm đến kiến trúc](KAFKA-ARCHITECTURE.md)
+
+Kafka là gì, sáu khái niệm cốt lõi, kiến trúc bên trong (replication, write/read path, storage, rebalance, delivery semantics) và khi nào nên/không nên dùng.
+
+- [1. Kafka là gì?](KAFKA-ARCHITECTURE.md#1-kafka-là-gì)
+- [2. Sáu khái niệm cốt lõi](KAFKA-ARCHITECTURE.md#2-sáu-khái-niệm-cốt-lõi)
+  - [Partition và offset](KAFKA-ARCHITECTURE.md#partition-và-offset--nhìn-tận-mắt) · [Consumer group](KAFKA-ARCHITECTURE.md#consumer-group--chia-việc-và-nhân-bản-luồng-đọc)
+- [3. Kiến trúc bên trong](KAFKA-ARCHITECTURE.md#3-kiến-trúc-bên-trong)
+  - [Bức tranh tổng thể](KAFKA-ARCHITECTURE.md#31-bức-tranh-tổng-thể) · [Partition trên cluster](KAFKA-ARCHITECTURE.md#32-partition-trải-ra-trên-cluster-như-thế-nào) · [Replication](KAFKA-ARCHITECTURE.md#33-replication--leader-và-follower) · [Write/read path](KAFKA-ARCHITECTURE.md#34-đường-đi-của-một-bản-ghi-write-path--read-path) · [Segment & retention](KAFKA-ARCHITECTURE.md#35-lưu-trữ-trên-đĩa--segment-và-retention) · [Group coordinator & rebalance](KAFKA-ARCHITECTURE.md#36-group-coordinator-và-rebalance) · [Delivery semantics](KAFKA-ARCHITECTURE.md#37-ngữ-nghĩa-giao-nhận-delivery-semantics)
+- [4. Kafka dùng để làm gì?](KAFKA-ARCHITECTURE.md#4-kafka-dùng-để-làm-gì)
+- [5. Khi nào *không* cần Kafka?](KAFKA-ARCHITECTURE.md#5-khi-nào-không-cần-kafka)
+- [6. Tóm tắt](KAFKA-ARCHITECTURE.md#6-tóm-tắt)
