@@ -174,3 +174,16 @@ Một engine tính availability duy nhất cho widget/staff/agent: tách đọc 
 - [5. Chống trùng booking giữa các kênh (điểm mấu chốt)](AVAILABILITY-ALLOCATOR-OVERVIEW.md#5-chống-trùng-booking-giữa-các-kênh-điểm-mấu-chốt)
 - [6. Hiệu năng tầng đọc](AVAILABILITY-ALLOCATOR-OVERVIEW.md#6-hiệu-năng-tầng-đọc)
 - [7. Closeout — hai mode](AVAILABILITY-ALLOCATOR-OVERVIEW.md#7-closeout--hai-mode)
+
+### 15. [Kiến trúc API: RESTful, GraphQL, gRPC](API_ARCHITECTURES.md)
+
+Ba kiến trúc API phổ biến: thành phần cấu tạo, luồng giao tiếp, ví dụ tối giản, chuyện gì xảy ra khi gọi, và tiêu chí lựa chọn.
+
+- [1. Tổng quan nhanh](API_ARCHITECTURES.md#1-tổng-quan-nhanh)
+- [2. RESTful](API_ARCHITECTURES.md#2-restful)
+  - Thành phần · Diagram giao tiếp · Ví dụ · Khi gọi, chuyện gì xảy ra · Ưu / nhược điểm · Dùng khi nào
+- [3. GraphQL](API_ARCHITECTURES.md#3-graphql)
+  - Thành phần · Diagram giao tiếp · Ví dụ · Khi gọi, chuyện gì xảy ra · Ưu / nhược điểm · Dùng khi nào
+- [4. gRPC](API_ARCHITECTURES.md#4-grpc)
+  - Thành phần · Diagram giao tiếp · Ví dụ · Khi gọi, chuyện gì xảy ra · Ưu / nhược điểm · Khi dùng
+- [5. Chọn kiến trúc nào](API_ARCHITECTURES.md#5-chọn-kiến-trúc-nào)
