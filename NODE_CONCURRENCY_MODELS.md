@@ -46,7 +46,68 @@ Tạo worker tốn kém (khởi tạo V8 isolate mới). Tài liệu chính th�
 
 Tức là không tạo worker mới cho mỗi tác vụ nhỏ — duy trì một pool tái sử dụng (ví dụ thư viện `piscina`).
 
-### 2.4. Sơ đồ
+### 2.4. Ví dụ
+
+**Dạng thô — API gốc của module** (minh họa cơ chế, không dùng cho tác vụ lặp lại vì vi phạm khuyến cáo pool ở 2.3):
+
+```typescript
+// availability.worker.ts — file này chạy trong luồng riêng
+import { parentPort, workerData } from 'node:worker_threads';
+import { computeAvailability } from './compute-availability';
+
+// workerData là bản clone của dữ liệu main thread gửi sang
+const result = computeAvailability(workerData.dayData);
+parentPort!.postMessage(result);
+```
+
+```typescript
+// main thread — bọc worker thành một Promise
+import { Worker } from 'node:worker_threads';
+
+function computeInWorker(dayData: DayData): Promise<AvailabilityResult> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(require.resolve('./availability.worker.js'), {
+      workerData: { dayData },
+    });
+    worker.once('message', resolve);
+    worker.once('error', reject);
+    worker.once('exit', (code) => {
+      if (code !== 0) reject(new Error(`Worker exited with code ${code}`));
+    });
+  });
+}
+```
+
+**Dạng thực dụng — worker pool với `piscina`** (đây là dạng nên dùng nếu dự án triển khai thật, áp vào đúng ứng viên ở mục 7.2):
+
+```typescript
+// availability.worker.ts — piscina quy ước gọi hàm export default
+import { computeAvailability } from './compute-availability';
+
+export default function compute(dayData: DayData): AvailabilityResult {
+  return computeAvailability(dayData);
+}
+```
+
+```typescript
+// pool tạo một lần lúc khởi động, tái sử dụng cho mọi request
+import Piscina from 'piscina';
+
+const pool = new Piscina({
+  filename: path.join(__dirname, 'availability.worker.js'),
+  maxThreads: 2,
+});
+
+// findNextAvailable: 14 ngày trở thành song song thật,
+// thay vì tuần tự trên event loop như Promise.all với hàm sync hiện tại
+const results = await Promise.all(
+  days.map((day) => pool.run(dayDataByDate[day])),
+);
+```
+
+Lưu ý khi dùng với TypeScript/NestJS: `filename` phải trỏ tới file **`.js` đã compile trong `dist/`**, không phải file `.ts` — cần chú ý khi cấu trúc build thay đổi. Dữ liệu vào/ra worker phải là plain JSON (structured clone không mang theo method, prototype, Sequelize instance).
+
+### 2.5. Sơ đồ
 
 ```mermaid
 flowchart LR
@@ -88,7 +149,37 @@ Vì không có bộ nhớ chung, tài liệu cảnh báo:
 
 Session, cache, state phải nằm ngoài process (Redis, DB) — điều nollie-api vốn đã tuân thủ.
 
-### 3.4. Sơ đồ
+### 3.4. Ví dụ
+
+Phỏng theo ví dụ trong tài liệu chính thức — một file duy nhất, chạy cả vai primary lẫn worker:
+
+```typescript
+import cluster from 'node:cluster';
+import http from 'node:http';
+import { availableParallelism } from 'node:os';
+
+if (cluster.isPrimary) {
+  // fork một worker cho mỗi core; primary không xử lý request
+  for (let i = 0; i < availableParallelism(); i++) {
+    cluster.fork();
+  }
+  // worker chết thì hồi sinh — primary kiêm vai trò giám sát
+  cluster.on('exit', (worker) => {
+    console.log(`worker ${worker.process.pid} died, forking a new one`);
+    cluster.fork();
+  });
+} else {
+  // mọi worker cùng gọi listen(3000) — thực chất primary giữ port
+  // và phân phối kết nối round-robin cho các worker
+  http
+    .createServer((req, res) => res.end(`handled by ${process.pid}`))
+    .listen(3000);
+}
+```
+
+Với NestJS, nhánh `else` chính là chỗ gọi `bootstrap()` (toàn bộ `app.listen(...)` hiện tại của `main.ts`). Về mặt kỹ thuật hoàn toàn áp được vào dự án — lý do không dùng không phải "không thể" mà là **không cần**: container chỉ được cấp ít vCPU và orchestrator đã scale bằng số bản sao container (mục 6), nên fork thêm process bên trong container chỉ nhân bộ nhớ lên vô ích.
+
+### 3.5. Sơ đồ
 
 ```mermaid
 flowchart LR
