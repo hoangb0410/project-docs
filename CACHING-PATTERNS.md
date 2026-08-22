@@ -19,8 +19,9 @@ Pattern phổ biến nhất. Ứng dụng tự quản lý cache, DB không biế
 ```
 
 Đặc điểm:
+
 - **Lazy**: chỉ dữ liệu thực sự được đọc mới nằm trong cache — không tốn công warm dữ liệu không ai cần.
-- **Chịu được cache chết**: Redis sập thì mọi request thành miss, hệ thống chậm đi nhưng vẫn đúng. Cache phải luôn là tầng *tăng tốc*, không bao giờ là tầng *sự thật*.
+- **Chịu được cache chết**: Redis sập thì mọi request thành miss, hệ thống chậm đi nhưng vẫn đúng. Cache phải luôn là tầng _tăng tốc_, không bao giờ là tầng _sự thật_.
 - **Nhược điểm cố hữu**: lần đọc đầu sau mỗi lần miss luôn chậm (phải tính lại), và có khoảng cửa sổ dữ liệu cũ nếu chỉ dựa vào TTL.
 
 ### Ví dụ trong dự án
@@ -43,18 +44,19 @@ return config;
 
 TTL không phải con số tùy hứng — nó trả lời câu hỏi: **"dữ liệu này được phép cũ tối đa bao lâu?"** Phân loại dữ liệu trước khi chọn:
 
-| Loại dữ liệu | Tần suất đổi | Hậu quả khi stale | TTL phù hợp |
-|---|---|---|---|
-| Config-shaped (branding, danh sách dịch vụ, settings) | Hiếm — chỉ khi admin lưu | Thấp (hiển thị sai vài phút) | Dài (giờ) + invalidate chủ động khi ghi |
-| State-shaped (tồn kho, availability, số dư) | Liên tục — mỗi transaction | Cao (bán trùng, overbook) | Ngắn (giây) + invalidate chủ động **bắt buộc** |
+| Loại dữ liệu                                          | Tần suất đổi               | Hậu quả khi stale            | TTL phù hợp                                    |
+| ----------------------------------------------------- | -------------------------- | ---------------------------- | ---------------------------------------------- |
+| Config-shaped (branding, danh sách dịch vụ, settings) | Hiếm — chỉ khi admin lưu   | Thấp (hiển thị sai vài phút) | Dài (giờ) + invalidate chủ động khi ghi        |
+| State-shaped (tồn kho, availability, số dư)           | Liên tục — mỗi transaction | Cao (bán trùng, overbook)    | Ngắn (giây) + invalidate chủ động **bắt buộc** |
 
 Nguyên tắc: **TTL chỉ là lưới an toàn (backstop), không phải cơ chế invalidation chính** cho dữ liệu state-shaped. Nếu bạn thấy mình chọn TTL = 5s để "cho đỡ stale", đó là dấu hiệu bạn đang thiếu invalidation chủ động.
 
 ### Ví dụ trong dự án
 
 Widget có đúng hai loại này:
+
 - `/config` (branding, services): TTL **1 giờ**, vì mọi chỗ admin ghi đều gọi refresh chủ động (mục 5) — TTL dài chỉ đỡ trường hợp ghi ngoài luồng.
-- Availability/pacing: TTL **60 giây**, vì một booking mới phải làm slot biến mất *ngay*, không đợi nổi 60s — nên mọi write path đều invalidate chủ động (mục 3), TTL 60s chỉ là backstop khi có đường ghi nào đó bị bỏ sót.
+- Availability/pacing: TTL **60 giây**, vì một booking mới phải làm slot biến mất _ngay_, không đợi nổi 60s — nên mọi write path đều invalidate chủ động (mục 3), TTL 60s chỉ là backstop khi có đường ghi nào đó bị bỏ sót.
 
 ---
 
@@ -80,9 +82,10 @@ Cụ thể:
 
 Hệ quả: key cũ (`...:v5`) vẫn nằm trong Redis nhưng **không reader nào trỏ tới nữa** — thành rác và tự bay theo TTL của chính nó. Đây là trade-off cốt lõi của pattern:
 
-> **Đổi bộ nhớ lấy tốc độ invalidation.** Chấp nhận rác tồn tại ≤ TTL để invalidation là O(1). Vì vậy pattern này *đòi hỏi* data key có TTL ngắn — TTL dài thì rác chất đống.
+> **Đổi bộ nhớ lấy tốc độ invalidation.** Chấp nhận rác tồn tại ≤ TTL để invalidation là O(1). Vì vậy pattern này _đòi hỏi_ data key có TTL ngắn — TTL dài thì rác chất đống.
 
 Lưu ý thiết kế:
+
 - Key version cũng cần TTL (dài hơn data TTL nhiều lần). Version hết hạn → đọc ra 0 → an toàn, vì data key nó từng trỏ tới đã hết hạn từ lâu.
 - Version vắng mặt = 0, nghĩa là thực thể mới toanh chạy được ngay, không cần khởi tạo.
 
@@ -94,7 +97,7 @@ Khi invalidation có nhiều **phạm vi nổ (blast radius)** khác nhau — v�
 version = coarseVersion × STRIDE + fineVersion
 ```
 
-`STRIDE` đủ lớn để fine không bao giờ tràn sang coarse trong vòng đời TTL. Bump counter thô một lần → version ghép của *mọi* key con đều nhảy → tất cả vô hiệu cùng lúc, vẫn O(1).
+`STRIDE` đủ lớn để fine không bao giờ tràn sang coarse trong vòng đời TTL. Bump counter thô một lần → version ghép của _mọi_ key con đều nhảy → tất cả vô hiệu cùng lúc, vẫn O(1).
 
 ### Ví dụ trong dự án
 
@@ -123,7 +126,7 @@ Data TTL 60s, version TTL 48h. Comment trong code ghi rõ pattern này **thay th
 
 ### Vấn đề lý thuyết
 
-**Stampede (thundering herd)**: khoảnh khắc một key hot bị vô hiệu (version bump hoặc TTL hết), *mọi* request đồng thời cùng miss và cùng lao vào tính lại một kết quả đắt đỏ. 200 request = 200 lần query DB giống hệt nhau. Cache càng hiệu quả lúc bình thường, stampede càng thảm khốc lúc miss — vì hệ thống đã được scale theo lượng tải *có* cache.
+**Stampede (thundering herd)**: khoảnh khắc một key hot bị vô hiệu (version bump hoặc TTL hết), _mọi_ request đồng thời cùng miss và cùng lao vào tính lại một kết quả đắt đỏ. 200 request = 200 lần query DB giống hệt nhau. Cache càng hiệu quả lúc bình thường, stampede càng thảm khốc lúc miss — vì hệ thống đã được scale theo lượng tải _có_ cache.
 
 ### Pattern: Single-Flight
 
@@ -134,24 +137,53 @@ Chỉ cho **một** request tính, số còn lại đợi kết quả:
 3. **Loser**: không đợi lock, mà **poll chính cache key** trong một cửa sổ ngắn — winner ghi xong là loser đọc được ngay.
 4. **Poll timeout → loser tự tính.** Đây là quyết định quan trọng nhất của pattern:
 
-> **Fail-open, không fail-closed.** Winner treo/chết thì hệ thống thoái hóa về hành vi chưa-có-cache (chậm), tuyệt đối không thoái hóa thành lỗi hay response rỗng. Lock trong caching là *tối ưu*, không phải *ràng buộc đúng đắn* — khác hẳn lock chống double-booking.
+> **Fail-open, không fail-closed.** Winner treo/chết thì hệ thống thoái hóa về hành vi chưa-có-cache (chậm), tuyệt đối không thoái hóa thành lỗi hay response rỗng. Lock trong caching là _tối ưu_, không phải _ràng buộc đúng đắn_ — khác hẳn lock chống double-booking.
 
 Hai tham số cần cân theo SLA:
+
 - **Lock TTL** = chặn trên thời gian một winner chết có thể block người khác.
 - **Cửa sổ poll** (số lần × khoảng cách) phải nằm gọn trong SLA response của endpoint.
+
+### Luồng chung một lần stampede
+
+```mermaid
+flowchart TD
+    MISS(["Request miss cache<br/>(key hot vừa bị vô hiệu)"]) --> LOCK{"SETNX lock:key<br/>token + TTL"}
+
+    LOCK -- "OK → winner<br/>(duy nhất 1 request)" --> COMPUTE["Compute — query đắt,<br/>chạy đúng 1 lần"]
+    COMPUTE --> SETC["SET data:key = result (TTL)"]
+    SETC --> REL["Release lock<br/>(chỉ xóa khi token khớp)"]
+    REL --> D1(["Trả kết quả"])
+
+    LOCK -- "nil → loser<br/>(mọi request còn lại)" --> POLL{"Poll data:key<br/>N lần × M ms"}
+    POLL -- "hit — winner ghi xong" --> D2(["Trả kết quả,<br/>không chạm DB"])
+    POLL -- "timeout — winner treo/chết" --> STALE{"Có bản stale?"}
+    STALE -- "có" --> D3(["Trả bản cũ ngay"])
+    STALE -- "không" --> SELF["Tự tính — fail-open"]
+    SELF --> D4(["Chậm chứ không lỗi"])
+```
+
+Ba điểm hay bị làm sai mà diagram làm rõ: loser poll **data key** chứ không poll lock (winner ghi xong là đọc được ngay, không cần chờ lock nhả); release lock phải **check token** để winner chậm không xóa nhầm lock của winner kế tiếp; và nhánh timeout luôn kết thúc bằng dữ liệu (stale hoặc tự tính), không bao giờ bằng lỗi.
+
+Hai câu hỏi thường gặp khi đọc diagram:
+
+- **Winner được chọn thế nào?** Bằng chính lệnh `SETNX` — atomic tại Redis, nhiều request cùng bắn thì đúng một lệnh trả OK, còn lại nhận nil. Không có vòng bầu chọn nào khác.
+- **Winner có broadcast cho loser không?** Không. Winner chỉ `SET data:key`; loser tự poll key đó nên vòng poll kế tiếp là hit — "thông báo" thụ động qua trạng thái cache. Không dùng pub/sub vì nó không thay được poll, chỉ thêm việc: message pub/sub là fire-and-forget, loser subscribe trễ hoặc message rơi thì vẫn phải có timeout + fallback y hệt — thêm một cơ chế delivery chỉ để tiết kiệm tối đa một khoảng poll (75ms), trong khi poll giữ pattern stateless (loser không đăng ký gì, chết giữa chừng không để lại rác).
 
 ### Ví dụ trong dự án
 
 `reservation-allocator.service.ts` → `computeDayProjection` / `computeDayData`:
 
 ```typescript
-const lockToken = await this.cache.acquireComputeLock(cacheKey); // SETNX, TTL 3s
+const lockToken = await this.cache.acquireComputeLock(cacheKey); // SETNX, TTL 15s
 if (!lockToken) {
-  const awaited = await this.waitForCachedProjection(cacheKey);  // poll 12 × 75ms
-  if (awaited) return awaited;                                    // winner ghi kịp
+  const awaited = await this.waitForCachedProjection(cacheKey); // poll 80 × 75ms ≈ 6s
+  if (awaited) return awaited; // winner ghi kịp
+  const stale = await this.cache.getAvailability(staleKey); // riêng projection: tầng stale
+  if (stale) return stale;
 }
 try {
-  const result = await computeExpensiveThing();                   // winner (hoặc loser timeout) tự tính
+  const result = await computeExpensiveThing(); // winner (hoặc loser timeout) tự tính
   await this.cache.setJson(cacheKey, result);
   return result;
 } finally {
@@ -159,7 +191,7 @@ try {
 }
 ```
 
-Con số cụ thể có lý do: poll 12 × 75ms ≈ 0.9s nằm trong SLA 2 giây của endpoint availability; lock TTL 3s là chặn trên khi winner crash. Muốn đổi phải đo lại theo SLA, không chỉnh tùy tiện.
+Con số cụ thể có lý do: lock TTL 15s là chặn trên khi winner crash (phải ≥ thời gian compute tệ nhất, không thì lock rơi giữa chừng và có 2 winner); cửa sổ poll 80 × 75ms ≈ 6s phủ được compute bình thường của winner. Poll dài hơn SLA 2s của availability được bù bằng tầng **stale** (TTL 300s, key không gắn version): trong thực tế loser gần như luôn thoát sớm — hoặc winner ghi xong sau vài trăm ms, hoặc rơi xuống stale — 6s chỉ là chặn trên của ca xấu nhất. `computeDayData` (day-load) không có tầng stale: loser timeout thì tự load DB. Muốn đổi các con số phải đo lại theo SLA, không chỉnh tùy tiện.
 
 ---
 
@@ -169,13 +201,13 @@ Con số cụ thể có lý do: poll 12 × 75ms ≈ 0.9s nằm trong SLA 2 giây
 
 Sau khi ghi dữ liệu, có hai cách xử lý cache, và **tên hàm nên phản ánh đúng cách nào**:
 
-| | Lazy invalidation | Eager refresh |
-|---|---|---|
-| Hành động | Làm cache cũ biến mất / unreachable | Xóa **và** chủ động dựng lại bản mới ngay |
-| Ai trả chi phí tính lại | Reader kế tiếp | Writer (hoặc hệ thống phía sau writer) |
-| Phù hợp khi | Ghi thường xuyên, nhiều biến thể key, reader chịu được một lần miss chậm | Ghi hiếm, có tầng cache **phía dưới không tự miss được** (trang static, CDN), cần thay đổi hiển thị ngay |
+|                         | Lazy invalidation                                                        | Eager refresh                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Hành động               | Làm cache cũ biến mất / unreachable                                      | Xóa **và** chủ động dựng lại bản mới ngay                                                                |
+| Ai trả chi phí tính lại | Reader kế tiếp                                                           | Writer (hoặc hệ thống phía sau writer)                                                                   |
+| Phù hợp khi             | Ghi thường xuyên, nhiều biến thể key, reader chịu được một lần miss chậm | Ghi hiếm, có tầng cache **phía dưới không tự miss được** (trang static, CDN), cần thay đổi hiển thị ngay |
 
-Điểm lý thuyết quan trọng: **cache-aside chỉ tự sửa được các tầng mà reader đi xuyên qua nó**. Nếu phía trước API còn một tầng cache *độc lập* — trang static đã render sẵn (ISR), CDN edge cache — thì xóa cache API xong tầng kia **vẫn serve bản cũ**, vì request không bao giờ chạm tới API để mà miss. Với các tầng đó bắt buộc phải *đẩy* tín hiệu revalidate sang (purge API của CDN, revalidate hook của Next.js...). Đây là lúc cần eager refresh.
+Điểm lý thuyết quan trọng: **cache-aside chỉ tự sửa được các tầng mà reader đi xuyên qua nó**. Nếu phía trước API còn một tầng cache _độc lập_ — trang static đã render sẵn (ISR), CDN edge cache — thì xóa cache API xong tầng kia **vẫn serve bản cũ**, vì request không bao giờ chạm tới API để mà miss. Với các tầng đó bắt buộc phải _đẩy_ tín hiệu revalidate sang (purge API của CDN, revalidate hook của Next.js...). Đây là lúc cần eager refresh.
 
 Quy tắc đi kèm: bước đẩy sang hệ thống ngoài phải **fail-open** — nó là bước làm-cho-nhanh-hơn, lỗi thì log rồi đi tiếp, không được làm hỏng transaction ghi của writer.
 
@@ -188,12 +220,12 @@ Hai verb, hai service, đúng theo bảng trên:
 
 Tóm gọn cách dự án chia hai verb — invalidate cho dữ liệu đổi liên tục, refresh cho dữ liệu đổi hiếm nhưng phải thấy ngay:
 
-| | `invalidateFor*` (lazy) | `refreshFor*` (eager) |
-|---|---|---|
-| Cache nào | Availability, pacing, day-data, extras | Payload `/config` + trang static Next.js |
-| Làm gì | +1 version counter, **không tính lại gì** — reader sau tự miss rồi tự tính | Xóa key Redis **và** gọi sang FE bắt Next.js render lại trang ngay |
-| Ai gọi | Mỗi booking/hold ghi (hàng nghìn lần/ngày) | Admin bấm lưu settings (vài lần/ngày) |
-| Vì sao | Ghi quá thường xuyên — tính lại trước cho mọi biến thể là phí; để reader trả chi phí | Trang static **không tự miss được** — không đẩy tín hiệu sang thì cứ serve HTML cũ; admin vừa lưu phải thấy ngay |
+|           | `invalidateFor*` (lazy)                                                              | `refreshFor*` (eager)                                                                                            |
+| --------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Cache nào | Availability, pacing, day-data, extras                                               | Payload `/config` + trang static Next.js                                                                         |
+| Làm gì    | +1 version counter, **không tính lại gì** — reader sau tự miss rồi tự tính           | Xóa key Redis **và** gọi sang FE bắt Next.js render lại trang ngay                                               |
+| Ai gọi    | Mỗi booking/hold ghi (hàng nghìn lần/ngày)                                           | Admin bấm lưu settings (vài lần/ngày)                                                                            |
+| Vì sao    | Ghi quá thường xuyên — tính lại trước cho mọi biến thể là phí; để reader trả chi phí | Trang static **không tự miss được** — không đẩy tín hiệu sang thì cứ serve HTML cũ; admin vừa lưu phải thấy ngay |
 
 ---
 
@@ -218,12 +250,12 @@ T1: commit
 
 ### Ví dụ trong dự án
 
-| Write | Gọi gì | Blast radius |
-|---|---|---|
-| Booking/hold create-update-cancel | `invalidateForDate(venueId, date)` | Availability của đúng ngày đó (booking qua nửa đêm bump cả 2 ngày) |
-| Admin sửa services/areas/booking config | `invalidateForVenue` **+** `refreshForVenue` | Availability mọi ngày + payload `/config` + trang static |
-| Admin sửa extras | `invalidateExtras(venueId)` | Chỉ catalogue extras, availability không đụng |
-| Admin sửa deposit rules / custom fields | `refreshForVenue` (không invalidate allocator) | Chỉ bề mặt config |
+| Write                                   | Gọi gì                                         | Blast radius                                                       |
+| --------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------ |
+| Booking/hold create-update-cancel       | `invalidateForDate(venueId, date)`             | Availability của đúng ngày đó (booking qua nửa đêm bump cả 2 ngày) |
+| Admin sửa services/areas/booking config | `invalidateForVenue` **+** `refreshForVenue`   | Availability mọi ngày + payload `/config` + trang static           |
+| Admin sửa extras                        | `invalidateExtras(venueId)`                    | Chỉ catalogue extras, availability không đụng                      |
+| Admin sửa deposit rules / custom fields | `refreshForVenue` (không invalidate allocator) | Chỉ bề mặt config                                                  |
 
 Mọi call site đều đứng sau khi DB write hoàn tất — đúng quy tắc (b).
 
@@ -239,7 +271,7 @@ Ngoài ra: khi kết quả đắt là một aggregate, cân nhắc **cache con s
 
 ### Ví dụ trong dự án
 
-- Guest sửa booking của mình → availability tính với `excludeReservation` (trừ chính booking đang sửa ra). Kết quả này đúng cho *duy nhất* booking đó → `booking-widget.service.ts` **bypass cache hoàn toàn** ở nhánh này, comment ghi rõ lý do.
+- Guest sửa booking của mình → availability tính với `excludeReservation` (trừ chính booking đang sửa ra). Kết quả này đúng cho _duy nhất_ booking đó → `booking-widget.service.ts` **bypass cache hoàn toàn** ở nhánh này, comment ghi rõ lý do.
 - `pacing-counter.service.ts` cache **một con số** (tổng covers đang active của một service) chứ không cache danh sách booking — aggregate-not-rows.
 
 ---
@@ -249,7 +281,7 @@ Ngoài ra: khi kết quả đắt là một aggregate, cân nhắc **cache con s
 Thiết kế cache cho một read path mới, đi qua các câu hỏi này theo thứ tự:
 
 1. **Có đáng cache không?** Đo trước: tần suất đọc × chi phí tính. Đọc hiếm hoặc tính rẻ → đừng cache, cache là complexity có lãi suất.
-2. **Dữ liệu thuộc loại nào?** Config-shaped (TTL dài + refresh khi ghi) hay state-shaped (TTL ngắn làm backstop + invalidate chủ động ở *mọi* write path)?
+2. **Dữ liệu thuộc loại nào?** Config-shaped (TTL dài + refresh khi ghi) hay state-shaped (TTL ngắn làm backstop + invalidate chủ động ở _mọi_ write path)?
 3. **Key có bao nhiêu biến thể trên một thực thể?** Nhiều → version-keyed invalidation ngay từ đầu, đừng để phải refactor khỏi SCAN+DEL như dự án này đã phải làm.
 4. **Blast radius của từng write?** Lập bảng write → invalidation, chọn granularity của version counter theo bảng (cần mấy tầng? stride bao nhiêu?).
 5. **Key có hot không?** Nhiều reader đồng thời trên cùng key → single-flight lock, tham số poll/TTL cân theo SLA, và luôn fail-open.
@@ -264,31 +296,35 @@ Thiết kế cache cho một read path mới, đi qua các câu hỏi này theo 
 
 Doc này xoay quanh **cache-aside** vì nó phổ biến nhất; dưới đây là các chiến lược còn lại và khi nào chúng thắng.
 
-| Chiến lược | Cách hoạt động | Dùng khi | Đánh đổi |
-|---|---|---|---|
-| **Read-Through** | Như cache-aside nhưng logic load nằm trong *tầng cache* (library/proxy tự query DB khi miss), app chỉ gọi `cache.get()` | Nhiều nơi cùng đọc một loại dữ liệu — tránh lặp code load | Cần cache layer thông minh; ít kiểm soát cách query |
-| **Write-Through** | Mọi write đi *xuyên qua* cache: ghi cache + ghi DB đồng bộ trong cùng thao tác | Đọc ngay sau ghi phải hit; chấp nhận write chậm hơn | Write latency tăng; cache chứa cả dữ liệu không ai đọc |
-| **Write-Behind (Write-Back)** | Ghi vào cache trước, trả về ngay; DB được ghi *bất đồng bộ* sau (batch) | Write cực nhiều, chịu được mất dữ liệu vài giây khi cache chết (counter, analytics, view count) | **Rủi ro mất dữ liệu** — cache tạm thời là source of truth; phức tạp nhất |
-| **Refresh-Ahead** | Cache tự làm mới key hot *trước khi* TTL hết, dựa trên tần suất truy cập | Key rất hot + tính lại đắt + không chịu nổi latency spike lúc miss | Dự đoán sai key hot = tính lại vô ích; thêm background machinery |
-| **Stale-While-Revalidate** | Hết TTL vẫn trả bản cũ ngay, đồng thời kích tính lại ở background cho lần sau | Latency quan trọng hơn độ tươi vài giây (HTTP caching, CDN có sẵn cơ chế này) | Có cửa sổ stale có chủ đích; cần định nghĩa "cũ tối đa bao nhiêu" |
-| **Negative Caching** | Cache cả kết quả "không tồn tại" (404, empty) với TTL ngắn | Bị hammer bởi lookup thứ không tồn tại (chống cache-penetration, ID rác) | Tạo xong dữ liệu thật phải nhớ invalidate bản negative |
-| **L1/L2 (in-memory + Redis)** | Cache 2 tầng: in-process (nanosecond) trước, Redis sau | Key cực hot mà round-trip Redis (~1ms) vẫn là bottleneck | L1 của mỗi instance stale độc lập — cần TTL rất ngắn hoặc pub/sub invalidate |
-| **Probabilistic Early Expiration** | Mỗi reader *xác suất* tự tính lại sớm trước TTL (xác suất tăng dần khi gần hết hạn) | Chống stampede không cần lock — thay thế single-flight khi không muốn cơ chế lock/poll | Vẫn có xác suất nhỏ nhiều reader cùng tính; khó reason hơn lock |
+| Chiến lược                         | Cách hoạt động                                                                                                          | Dùng khi                                                                                        | Đánh đổi                                                                     |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Read-Through**                   | Như cache-aside nhưng logic load nằm trong _tầng cache_ (library/proxy tự query DB khi miss), app chỉ gọi `cache.get()` | Nhiều nơi cùng đọc một loại dữ liệu — tránh lặp code load                                       | Cần cache layer thông minh; ít kiểm soát cách query                          |
+| **Write-Through**                  | Mọi write đi _xuyên qua_ cache: ghi cache + ghi DB đồng bộ trong cùng thao tác                                          | Đọc ngay sau ghi phải hit; chấp nhận write chậm hơn                                             | Write latency tăng; cache chứa cả dữ liệu không ai đọc                       |
+| **Write-Behind (Write-Back)**      | Ghi vào cache trước, trả về ngay; DB được ghi _bất đồng bộ_ sau (batch)                                                 | Write cực nhiều, chịu được mất dữ liệu vài giây khi cache chết (counter, analytics, view count) | **Rủi ro mất dữ liệu** — cache tạm thời là source of truth; phức tạp nhất    |
+| **Refresh-Ahead**                  | Cache tự làm mới key hot _trước khi_ TTL hết, dựa trên tần suất truy cập                                                | Key rất hot + tính lại đắt + không chịu nổi latency spike lúc miss                              | Dự đoán sai key hot = tính lại vô ích; thêm background machinery             |
+| **Stale-While-Revalidate**         | Hết TTL vẫn trả bản cũ ngay, đồng thời kích tính lại ở background cho lần sau                                           | Latency quan trọng hơn độ tươi vài giây (HTTP caching, CDN có sẵn cơ chế này)                   | Có cửa sổ stale có chủ đích; cần định nghĩa "cũ tối đa bao nhiêu"            |
+| **Negative Caching**               | Cache cả kết quả "không tồn tại" (404, empty) với TTL ngắn                                                              | Bị hammer bởi lookup thứ không tồn tại (chống cache-penetration, ID rác)                        | Tạo xong dữ liệu thật phải nhớ invalidate bản negative                       |
+| **L1/L2 (in-memory + Redis)**      | Cache 2 tầng: in-process (nanosecond) trước, Redis sau                                                                  | Key cực hot mà round-trip Redis (~1ms) vẫn là bottleneck                                        | L1 của mỗi instance stale độc lập — cần TTL rất ngắn hoặc pub/sub invalidate |
+| **Probabilistic Early Expiration** | Mỗi reader _xác suất_ tự tính lại sớm trước TTL (xác suất tăng dần khi gần hết hạn)                                     | Chống stampede không cần lock — thay thế single-flight khi không muốn cơ chế lock/poll          | Vẫn có xác suất nhỏ nhiều reader cùng tính; khó reason hơn lock              |
 
 ### 9a. Read-Through
 
-- **Ý tưởng dễ hiểu:** cache-aside nhưng app "lười" hơn — app chỉ hỏi cache, còn *cache tự biết* cách đi lấy dữ liệu khi miss. Logic "miss thì query DB" viết một lần trong cache layer thay vì lặp lại ở mọi service.
+- **Ý tưởng dễ hiểu:** cache-aside nhưng app "lười" hơn — app chỉ hỏi cache, còn _cache tự biết_ cách đi lấy dữ liệu khi miss. Logic "miss thì query DB" viết một lần trong cache layer thay vì lặp lại ở mọi service.
 - **Ví dụ đơn giản:** ORM có second-level cache (Hibernate), hoặc tự viết:
 
 ```typescript
 // Thay vì mỗi service tự viết if-miss-then-query:
-const user = await cache.getOrLoad(`user:${id}`, () => userRepo.findById(id), 300);
+const user = await cache.getOrLoad(
+  `user:${id}`,
+  () => userRepo.findById(id),
+  300,
+);
 // getOrLoad gói toàn bộ: get → miss → gọi loader → set TTL → trả về
 ```
 
 ### 9b. Write-Through
 
-- **Ý tưởng dễ hiểu:** ghi tiền vào sổ ngân hàng *và* ví cùng lúc — đọc ví lúc nào cũng khớp sổ. Mọi write cập nhật cache ngay trong cùng thao tác, nên không bao giờ có cửa sổ stale sau khi ghi.
+- **Ý tưởng dễ hiểu:** ghi tiền vào sổ ngân hàng _và_ ví cùng lúc — đọc ví lúc nào cũng khớp sổ. Mọi write cập nhật cache ngay trong cùng thao tác, nên không bao giờ có cửa sổ stale sau khi ghi.
 - **Ví dụ đơn giản:** profile user mà màn hình ngay sau khi bấm "Lưu" phải hiện đúng:
 
 ```typescript
@@ -305,19 +341,19 @@ async updateProfile(id, dto) {
 - **Ví dụ đơn giản:** đếm view bài viết — 10.000 view/phút mà mỗi view một UPDATE thì DB chết:
 
 ```typescript
-await redis.incr(`views:${postId}`);              // mỗi view chỉ chạm Redis
+await redis.incr(`views:${postId}`); // mỗi view chỉ chạm Redis
 // Cron mỗi 60s: đọc counter → UPDATE posts SET views = views + n → reset counter
 // Redis sập giữa chừng → mất tối đa 60s view count: chấp nhận được với số liệu này
 ```
 
 ### 9d. Refresh-Ahead
 
-- **Ý tưởng dễ hiểu:** quán cơm thấy món hot sắp hết thì nấu nồi mới *trước khi* nồi cũ cạn — khách không bao giờ phải đứng đợi. Cache tự làm mới key hot trước khi TTL hết, reader không bao giờ dính miss chậm.
+- **Ý tưởng dễ hiểu:** quán cơm thấy món hot sắp hết thì nấu nồi mới _trước khi_ nồi cũ cạn — khách không bao giờ phải đứng đợi. Cache tự làm mới key hot trước khi TTL hết, reader không bao giờ dính miss chậm.
 - **Ví dụ đơn giản:** bảng xếp hạng trang chủ, query mất 3s, TTL 5 phút:
 
 ```typescript
 // Cron chạy mỗi 4 phút (trước khi TTL 5 phút hết):
-const board = await computeLeaderboard();          // 3s, nhưng chạy nền, không ai đợi
+const board = await computeLeaderboard(); // 3s, nhưng chạy nền, không ai đợi
 await cache.set('leaderboard', board, 300);
 // Reader luôn hit — latency spike 3s biến mất khỏi request path
 ```
@@ -345,7 +381,7 @@ if (cached === 'NOT_FOUND') throw new NotFoundException(); // chặn từ cache
 if (cached) return JSON.parse(cached);
 const user = await this.userRepo.findById(id);
 if (!user) {
-  await cache.set(`user:${id}`, 'NOT_FOUND', 60);          // TTL ngắn thôi
+  await cache.set(`user:${id}`, 'NOT_FOUND', 60); // TTL ngắn thôi
   throw new NotFoundException();
 }
 ```
@@ -353,7 +389,7 @@ if (!user) {
 ### 9g. L1/L2 (in-memory + Redis)
 
 - **Ý tưởng dễ hiểu:** giấy nhớ trên bàn (L1 — với tay là lấy) và tủ hồ sơ cuối phòng (L2 — phải đứng dậy). Thứ tra liên tục thì chép ra giấy nhớ, chấp nhận giấy nhớ có thể lỗi thời hơn tủ một chút.
-- **Ví dụ đơn giản:** feature flags đọc ở *mọi* request — 1ms round-trip Redis × mọi request vẫn là đáng kể:
+- **Ví dụ đơn giản:** feature flags đọc ở _mọi_ request — 1ms round-trip Redis × mọi request vẫn là đáng kể:
 
 ```typescript
 const l1 = new Map();                               // trong process, TTL 5s
@@ -369,21 +405,23 @@ async getFlag(name) {
 
 ### 9h. Probabilistic Early Expiration
 
-- **Ý tưởng dễ hiểu:** thay vì cả phòng cùng ùa đi lấy nước lúc bình cạn, mỗi người *tung xúc xắc* — bình càng gần cạn, xác suất "tôi đi lấy luôn" càng cao. Thường chỉ một người đi sớm, những người còn lại vẫn có nước uống, và khoảnh khắc bình-cạn-cả-phòng-ùa-đi không bao giờ xảy ra.
+- **Ý tưởng dễ hiểu:** thay vì cả phòng cùng ùa đi lấy nước lúc bình cạn, mỗi người _tung xúc xắc_ — bình càng gần cạn, xác suất "tôi đi lấy luôn" càng cao. Thường chỉ một người đi sớm, những người còn lại vẫn có nước uống, và khoảnh khắc bình-cạn-cả-phòng-ùa-đi không bao giờ xảy ra.
 - **Ví dụ đơn giản:**
 
 ```typescript
 const { value, savedAt, ttl, computeMs } = await cache.getWithMeta(key);
 // Càng gần hết hạn (và tính càng đắt), càng dễ "trúng số" tự tính lại sớm:
 const shouldRecomputeEarly =
-  value && monotonicNow() > savedAt + ttl - computeMs * beta * -Math.log(random());
+  value &&
+  monotonicNow() > savedAt + ttl - computeMs * beta * -Math.log(random());
 if (!value || shouldRecomputeEarly) {
-  return recomputeAndSet(key);                      // một reader lẻ tự làm mới sớm
+  return recomputeAndSet(key); // một reader lẻ tự làm mới sớm
 }
-return value;                                       // số còn lại dùng bản cũ vẫn hợp lệ
+return value; // số còn lại dùng bản cũ vẫn hợp lệ
 ```
 
 Cách chọn nhanh:
+
 - **Đọc nhiều, ghi ít** → cache-aside (mặc định) hoặc read-through.
 - **Đọc ngay sau ghi phải đúng** → write-through.
 - **Ghi dồn dập, chịu được mất mát** → write-behind.
