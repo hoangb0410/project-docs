@@ -200,3 +200,16 @@ Kafka là gì, sáu khái niệm cốt lõi, kiến trúc bên trong (replicatio
 - [4. Kafka dùng để làm gì?](KAFKA-ARCHITECTURE.md#4-kafka-dùng-để-làm-gì)
 - [5. Khi nào *không* cần Kafka?](KAFKA-ARCHITECTURE.md#5-khi-nào-không-cần-kafka)
 - [6. Tóm tắt](KAFKA-ARCHITECTURE.md#6-tóm-tắt)
+
+### 17. [Các mô hình song song hóa trong Node.js — worker_threads, cluster, đa process](NODE_CONCURRENCY_MODELS.md)
+
+Ba cách vượt giới hạn single-thread của Node.js: worker_threads cho tác vụ CPU-bound, cluster để chia tải request, và đa process độc lập theo vai trò; so sánh, tiêu chí chọn và đối chiếu với nollie-api.
+
+- [1. Mô hình tư duy tối giản](NODE_CONCURRENCY_MODELS.md#1-mô-hình-tư-duy-tối-giản)
+- [2. Worker Threads](NODE_CONCURRENCY_MODELS.md#2-worker-threads)
+- [3. Cluster](NODE_CONCURRENCY_MODELS.md#3-cluster)
+- [4. Đa process độc lập (multi-process theo vai trò)](NODE_CONCURRENCY_MODELS.md#4-đa-process-độc-lập-multi-process-theo-vai-trò)
+- [5. So sánh trực tiếp](NODE_CONCURRENCY_MODELS.md#5-so-sánh-trực-tiếp)
+- [6. Khi nào dùng cái nào](NODE_CONCURRENCY_MODELS.md#6-khi-nào-dùng-cái-nào)
+- [7. Đối chiếu với nollie-api](NODE_CONCURRENCY_MODELS.md#7-đối-chiếu-với-nollie-api)
+- [Nguồn tham khảo](NODE_CONCURRENCY_MODELS.md#nguồn-tham-khảo)
