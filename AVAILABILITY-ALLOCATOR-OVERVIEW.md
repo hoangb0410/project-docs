@@ -89,7 +89,34 @@ flowchart LR
 
 Tầng đọc (availability) đi qua engine + cache; tầng ghi (hold/booking) của mọi kênh đều đổ về cùng các ràng buộc Postgres — đó là nơi chặn conflict.
 
-Khác biệt giữa widget và staff chỉ nằm ở **rule lọc**, không phải thuật toán:
+Lưu ý phạm vi "chung": engine chung cho cả 3 kênh ở tầng **availability (đọc)**; còn logic **chọn bàn** (`pickBestTableAssignment`, tightest fit — mục 3) chỉ chung cho **2 kênh** widget + staff. Agent không tham gia tầng chọn bàn vì agent create là table-less — chỉ tiêu thụ pacing, chốt đúng bằng advisory lock (mục 5b).
+
+```mermaid
+flowchart TD
+    W["Widget"] -->|"context: widget"| CA
+    S["Staff"] -->|"context: staff"| CA
+    A["Agent"] -->|"tái sử dụng getWidgetSlots"| CA
+
+    subgraph read ["Tầng ĐỌC availability — chung cả 3 kênh"]
+        CA["computeAvailability<br/>slot grid + pacing + filterCandidates"]
+    end
+
+    subgraph alloc ["Tầng CHỌN BÀN — chỉ widget + staff"]
+        PICK["pickBestTableAssignment<br/>tightest fit, deterministic"]
+        SCORE["Tier + score<br/>(hiển thị cho staff)"]
+    end
+
+    subgraph write ["Tầng GHI"]
+        SPAN["Physical span<br/>GiST exclusion constraint"]
+        PACE["Pacing counter<br/>advisory lock"]
+    end
+
+    CA -->|"widget hold:<br/>engine tự chọn bàn"| PICK
+    CA -->|"staff: engine gợi ý,<br/>staff quyết"| SCORE
+    CA -->|"agent create: table-less<br/>(widget confirm cũng đếm pacing)"| PACE
+    PICK --> SPAN
+    SCORE --> SPAN
+```
 
 - Widget: loại bàn `isInternalBookingsOnly`, area `isBookableOnline=false`, pool bàn giữ cho walk-in; đuôi ca giữ lại nguyên 1 turn time; áp `leadTimeMinutes` + `bookingWindowDays`; combo chỉ là fallback khi không có bàn đơn vừa.
 - Staff: thấy tất cả bàn (kèm cờ `conflict`/`fitsParty`), đuôi ca chỉ giữ lại buffer, bỏ qua closeout `online_only`.
@@ -121,6 +148,19 @@ flowchart TD
 ```
 
 > Điểm 4 là nâng cấp quan trọng: availability **không còn pacing-only**. Trước đây slot "available" vẫn có thể 410 ở bước hold vì không có bàn vật lý vừa — giờ check bàn được kéo lên ngay tầng availability.
+
+### Check table-aware chạy thế nào
+
+Với mỗi slot qua được pacing, engine gọi `filterCandidates` (pure function, cùng hàm mà hold/staff dùng để liệt kê bàn) với `context:'widget'` — slot `AVAILABLE` khi hàm trả về ≥ 1 candidate. Một bàn được tính là candidate khi thỏa **cả bốn** điều kiện:
+
+1. **Được phép bán online**: loại bàn `isInternalBookingsOnly`, bàn thuộc area `isBookableOnline=false`, và bàn nằm trong pool giữ cho walk-in (N% bàn đầu theo `displayOrder`, N = `walkInTableReservePercent`).
+2. **Vừa size**: `minCover ≤ partySize ≤ maxCover` — bàn quá to cũng bị loại, không chỉ bàn quá nhỏ.
+3. **Không bị closeout**: closeout per-area đang active tại slot được quy ra danh sách table id bị đóng (staff bỏ qua scope `online_only`, widget thì không).
+4. **Trống suốt cửa sổ ngồi ăn**: cửa sổ slot = `[start, start + turnTime + buffer)` theo timezone venue; bàn bị coi là bận nếu cửa sổ này chồng lên **bất kỳ physical span nào** — cả span của booking lẫn span của **hold đang sống** (hold chặn bàn ngay từ tầng đọc, không chỉ tầng ghi). Flow modify loại span của chính booking đang sửa qua `excludeReservationId`.
+
+**Combo chỉ là fallback**: khi không còn bàn đơn nào vừa, engine mới xét combo — combo đạt khi `partySize ≤ partyCovers`, **mọi** bàn thành viên đều trống + không closeout + được phép bán online. Staff thì luôn thấy cả combo lẫn bàn conflict (khác biệt lọc, không khác thuật toán).
+
+Chi phí: toàn bộ spans/tables/closeouts đã nằm trong day data load 1 lần ở đầu — check per-slot chỉ là so khoảng thời gian in-memory, không thêm query nào, nên table-aware không làm tầng đọc chậm đi đáng kể.
 
 Response widget chỉ là `{ time, status, hasPromotion }` — **không bao giờ lộ table id** ra public.
 
