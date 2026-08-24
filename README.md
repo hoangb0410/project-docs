@@ -198,7 +198,7 @@ Kafka là gì, sáu khái niệm cốt lõi, kiến trúc bên trong (replicatio
 - [3. Kiến trúc bên trong](KAFKA-ARCHITECTURE.md#3-kiến-trúc-bên-trong)
   - [Bức tranh tổng thể](KAFKA-ARCHITECTURE.md#31-bức-tranh-tổng-thể) · [Partition trên cluster](KAFKA-ARCHITECTURE.md#32-partition-trải-ra-trên-cluster-như-thế-nào) · [Replication](KAFKA-ARCHITECTURE.md#33-replication--leader-và-follower) · [Write/read path](KAFKA-ARCHITECTURE.md#34-đường-đi-của-một-bản-ghi-write-path--read-path) · [Segment & retention](KAFKA-ARCHITECTURE.md#35-lưu-trữ-trên-đĩa--segment-và-retention) · [Group coordinator & rebalance](KAFKA-ARCHITECTURE.md#36-group-coordinator-và-rebalance) · [Delivery semantics](KAFKA-ARCHITECTURE.md#37-ngữ-nghĩa-giao-nhận-delivery-semantics)
 - [4. Kafka dùng để làm gì?](KAFKA-ARCHITECTURE.md#4-kafka-dùng-để-làm-gì)
-- [5. Khi nào *không* cần Kafka?](KAFKA-ARCHITECTURE.md#5-khi-nào-không-cần-kafka)
+- [5. Khi nào _không_ cần Kafka?](KAFKA-ARCHITECTURE.md#5-khi-nào-không-cần-kafka)
 - [6. Tóm tắt](KAFKA-ARCHITECTURE.md#6-tóm-tắt)
 
 ### 17. [Các mô hình song song hóa trong Node.js — worker_threads, cluster, đa process](NODE_CONCURRENCY_MODELS.md)
@@ -242,7 +242,7 @@ Các lớp phòng thủ cho endpoint không cần đăng nhập: rate limiting n
   - [Nhóm B — caller có định danh](PUBLIC-API-PROTECTION.md#42-nhóm-b--chỉ-dành-cho-caller-có-định-danh-server-to-server): [API key + quota](PUBLIC-API-PROTECTION.md#api-key--quota-theo-tier) · [HMAC signing](PUBLIC-API-PROTECTION.md#hmac-request-signing) · [Chống replay](PUBLIC-API-PROTECTION.md#chống-replay-timestamp--nonce) · [mTLS](PUBLIC-API-PROTECTION.md#mtls-mutual-tls) · [IP allowlist](PUBLIC-API-PROTECTION.md#ip-allowlist)
 - [5. Checklist khi thêm một endpoint public mới](PUBLIC-API-PROTECTION.md#5-checklist-khi-thêm-một-endpoint-public-mới)
 
-### 20. [Pagination — Offset, Keyset/Cursor và thiết kế API phân trang](PAGINATION.md)
+### 21. [Pagination — Offset, Keyset/Cursor và thiết kế API phân trang](PAGINATION.md)
 
 Lý thuyết chung về phân trang: vì sao offset chậm dần và trôi trang, vì sao keyset ổn định, khi nào cần opaque cursor; response envelope, các quy tắc an toàn và bảng chọn mô hình — nollie-api làm ví dụ cho cả ba mô hình.
 
@@ -255,3 +255,14 @@ Lý thuyết chung về phân trang: vì sao offset chậm dần và trôi trang
 - [5. Các quy tắc an toàn đi kèm](PAGINATION.md#5-các-quy-tắc-an-toàn-đi-kèm)
 - [6. Chọn mô hình nào — bảng quyết định](PAGINATION.md#6-chọn-mô-hình-nào--bảng-quyết-định)
 - [7. Checklist khi thêm một endpoint trả danh sách](PAGINATION.md#7-checklist-khi-thêm-một-endpoint-trả-danh-sách)
+
+### 22. [GitHub Actions — Cheatsheet cú pháp chung](GITHUB-ACTIONS-CHEATSHEET.md)
+
+Tổng hợp nhanh các cú pháp và pattern hay dùng trong GitHub Actions: trigger, permissions, jobs, steps, outputs, và các biến context phổ biến.
+
+- [1. Cấu trúc khung tổng quát](GITHUB-ACTIONS-CHEATSHEET.md#1-cấu-trúc-khung-tổng-quát)
+- [2. `on` — sự kiện trigger](GITHUB-ACTIONS-CHEATSHEET.md#2-on--sự-kiện-trigger)
+- [3. `permissions` — quyền của `GITHUB_TOKEN`](GITHUB-ACTIONS-CHEATSHEET.md#3-permissions--quyền-của-github_token)
+- [4. `jobs` — các job và quan hệ giữa chúng](GITHUB-ACTIONS-CHEATSHEET.md#4-jobs--các-job-và-quan-hệ-giữa-chúng)
+- [5. `steps` — các bước trong một job](GITHUB-ACTIONS-CHEATSHEET.md#5-steps--các-bước-trong-1-job)
+- [6. Biến & context hay dùng](GITHUB-ACTIONS-CHEATSHEET.md#6-biến--context-hay-dùng)
