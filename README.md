@@ -241,3 +241,17 @@ Các lớp phòng thủ cho endpoint không cần đăng nhập: rate limiting n
   - [Nhóm A — bề mặt ẩn danh](PUBLIC-API-PROTECTION.md#41-nhóm-a--dùng-được-cho-bề-mặt-ẩn-danh): [Bot detection](PUBLIC-API-PROTECTION.md#bot-detection--device-fingerprinting) · [Signed URL/JWT](PUBLIC-API-PROTECTION.md#signed-url--token-tự-chứa-có-thời-hạn) · [Query cost limiting](PUBLIC-API-PROTECTION.md#giới-hạn-chi-phí-truy-vấn-query-cost-limiting) · [Security headers](PUBLIC-API-PROTECTION.md#security-headers--https-only) · [Geo-blocking](PUBLIC-API-PROTECTION.md#geo-blocking)
   - [Nhóm B — caller có định danh](PUBLIC-API-PROTECTION.md#42-nhóm-b--chỉ-dành-cho-caller-có-định-danh-server-to-server): [API key + quota](PUBLIC-API-PROTECTION.md#api-key--quota-theo-tier) · [HMAC signing](PUBLIC-API-PROTECTION.md#hmac-request-signing) · [Chống replay](PUBLIC-API-PROTECTION.md#chống-replay-timestamp--nonce) · [mTLS](PUBLIC-API-PROTECTION.md#mtls-mutual-tls) · [IP allowlist](PUBLIC-API-PROTECTION.md#ip-allowlist)
 - [5. Checklist khi thêm một endpoint public mới](PUBLIC-API-PROTECTION.md#5-checklist-khi-thêm-một-endpoint-public-mới)
+
+### 20. [Pagination — Offset, Keyset/Cursor và thiết kế API phân trang](PAGINATION.md)
+
+Lý thuyết chung về phân trang: vì sao offset chậm dần và trôi trang, vì sao keyset ổn định, khi nào cần opaque cursor; response envelope, các quy tắc an toàn và bảng chọn mô hình — nollie-api làm ví dụ cho cả ba mô hình.
+
+- [1. Vì sao phải phân trang](PAGINATION.md#1-vì-sao-phải-phân-trang)
+- [2. Nguyên tắc nền: thứ tự phải deterministic](PAGINATION.md#2-nguyên-tắc-nền-thứ-tự-phải-deterministic)
+  - Không có ORDER BY · Thiếu tie-breaker trên cột không unique · Khóa sort mutable
+- [3. Ba mô hình phân trang](PAGINATION.md#3-ba-mô-hình-phân-trang)
+  - [Offset — "trang số N"](PAGINATION.md#31-offset-pagination--trang-số-n) · [Keyset/cursor — "tiếp sau bản ghi X"](PAGINATION.md#32-keyset-cursor-pagination--tiếp-sau-bản-ghi-x) · [Opaque cursor — keyset giấu sau token](PAGINATION.md#33-opaque-cursor--keyset-giấu-sau-một-token) · [Bảng so sánh ba mô hình](PAGINATION.md#34-bảng-so-sánh-ba-mô-hình) · [Keyset nâng cao — nhiều cột sort, filter và search](PAGINATION.md#35-keyset-nâng-cao--nhiều-cột-sort-filter-và-search)
+- [4. Thiết kế response envelope](PAGINATION.md#4-thiết-kế-response-envelope)
+- [5. Các quy tắc an toàn đi kèm](PAGINATION.md#5-các-quy-tắc-an-toàn-đi-kèm)
+- [6. Chọn mô hình nào — bảng quyết định](PAGINATION.md#6-chọn-mô-hình-nào--bảng-quyết-định)
+- [7. Checklist khi thêm một endpoint trả danh sách](PAGINATION.md#7-checklist-khi-thêm-một-endpoint-trả-danh-sách)
