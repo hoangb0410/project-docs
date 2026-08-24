@@ -298,14 +298,33 @@ Threat model chấp nhận các leak này khi mục tiêu chính là _DB dump kh
 
 ### 5.1. Kiến trúc tổng thể của lời giải
 
-```
-                      ghi (create/update)
-Service ──► Encrypted Repository ──► AES-256-CBC (deterministic) ──► cột ciphertext
-                      │              └► blind index (prefix ≥3 → hash cắt ngắn) ──► cột {field}_tokens
-                      │
-                      đọc (find + WHERE trên field mã hóa)
-                      └──► rewrite: WHERE field=... ➜ WHERE tokens ⊇ tokens(từ khóa)
-                           kết quả ──► decrypt (fail-safe) ──► plaintext cho service
+```mermaid
+flowchart TB
+    SVC[Service]
+    REPO[Encrypted Repository]
+
+    SVC -->|"ghi (create/update)"| REPO
+    SVC -->|"đọc (find + WHERE trên field mã hóa)"| REPO
+
+    subgraph W["Đường ghi"]
+        AES["AES-256-CBC (deterministic)"]
+        BI["Blind index<br/>prefix ≥ 3 → hash cắt ngắn"]
+        CT[("cột ciphertext")]
+        TK[("cột {field}_tokens")]
+        AES --> CT
+        BI --> TK
+    end
+
+    subgraph R["Đường đọc"]
+        RW["Rewrite query<br/>WHERE field = ... → WHERE tokens ⊇ tokens(từ khóa)"]
+        DEC["Decrypt (fail-safe)"]
+        RW -->|"kết quả (ciphertext)"| DEC
+    end
+
+    REPO --> AES
+    REPO --> BI
+    REPO --> RW
+    DEC -->|"plaintext cho service"| SVC
 ```
 
 ### 5.2. Bản đồ quyết định & trade-off
