@@ -288,9 +288,31 @@ Blind index là **giảm leak, không phải zero leak** — cần biết rõ đ
 1. **Hash không key vs có key**: nếu dùng hash thuần (SHA-256), kẻ có DB dump tự tính được `sha256("cha")` và dò ngược token ngắn/phổ biến (tên người, domain email phổ biến). Chuẩn tốt hơn là **HMAC-SHA256 với một key riêng** (khác key mã hóa) — khi đó không có key thì không tính được hash để dò. Đổi từ hash thuần sang HMAC yêu cầu re-index toàn bộ. _(nollie-api hiện dùng SHA-256 thuần cắt 16 hex — điểm nâng cấp tiềm năng.)_
 2. **Leak prefix-equality giữa các row**: hai bản ghi chung chuỗi token đầu → biết chúng có giá trị cùng prefix.
 3. **Số lượng token ≈ độ dài giá trị** → leak xấp xỉ độ dài plaintext.
-4. **Chỉ prefix search** — không substring (`%abc%`), không fuzzy. Muốn substring phải sinh n-gram tokens, nổ số lượng token và nới rộng leak.
+4. **Chỉ prefix search** — không substring (`%abc%`), không fuzzy. Muốn substring phải sinh n-gram tokens (xem 4.8) — nới rộng leak đáng kể.
 
 Threat model chấp nhận các leak này khi mục tiêu chính là _DB dump không đọc trực tiếp được PII_, không phải kháng một đối thủ có tài nguyên phân tích offline vô hạn.
+
+### 4.8. Biến thể n-gram — substring search (⚠️ không khuyến khích)
+
+Prefix token chỉ cắt từ **đầu chuỗi**, nên chỉ trả lời được `LIKE 'x%'`. Nếu bắt buộc phải có substring search (`LIKE '%x%'`), mở rộng lý thuyết là **n-gram token**: cắt bằng **cửa sổ trượt** qua mọi vị trí thay vì chỉ từ đầu.
+
+Với `"charles"` và cỡ gram cố định n = 3:
+
+```
+prefix ≥3 (cách hiện tại):  ["cha", "char", "charl", "charle", "charles"]
+3-gram (cửa sổ trượt):      ["cha", "har", "arl", "rle", "les"]
+```
+
+Phía đọc giữ nguyên cơ chế containment: từ khóa `"harl"` → 3-gram hóa → `["har", "arl"]` → `WHERE tokens ⊇ {h(har), h(arl)}`. Row chứa đủ các gram của từ khóa được coi là match — tương đương `LIKE '%harl%'` mà DB không biết plaintext.
+
+**Vì sao không khuyến khích** — các hạn chế phải hiểu trước khi cân nhắc:
+
+1. **Leak rộng hơn hẳn prefix token**: index lộ hash của *mọi đoạn con bên trong* giá trị, không chỉ phần đầu. Các gram chồng lấp nhau (`cha`–`har`–`arl`… chung 2 ký tự liên tiếp) tạo thành một chuỗi ghép nối được — kẻ có DB dump và bảng tra hash (đặc biệt khi dùng hash thuần không key như hiện tại, xem 4.7 mục 1) có thể **khôi phục gần như toàn bộ plaintext** bằng cách nối các gram đã dò được, như ghép mảnh xếp hình. Với prefix token, dò được token ngắn chỉ lộ phần đầu chuỗi; với n-gram, dò được là lộ cả chuỗi.
+2. **False positive về bản chất**: containment chỉ kiểm tra "có đủ các gram", không kiểm tra chúng **liền kề và đúng thứ tự**. Row chứa `"har"` và `"arl"` ở hai vị trí rời nhau vẫn match từ khóa `"harl"`. Muốn kết quả đúng phải giải mã rồi lọc lại ở tầng ứng dụng — thêm một bước decrypt-then-filter tốn kém mà prefix token không cần.
+3. **Nổ số lượng token nếu cần nhiều cỡ gram**: biến thể sinh gram đủ mọi cỡ (3, 4, …, L) để match trực tiếp từ khóa dài cho ra ~L²/2 token mỗi giá trị thay vì L−2 — index phình theo bình phương độ dài, chi phí ghi và GIN index tăng tương ứng.
+4. **Không giải quyết nhu cầu thực**: use case của hệ thống là autocomplete — người dùng gõ *đầu* tên/email/SĐT. Substring search giữa chuỗi không phải yêu cầu sản phẩm, nên trả giá thêm leak + false positive + storage là trả giá cho một tính năng không ai cần.
+
+**Kết luận**: giữ prefix token làm chuẩn của codebase. Chỉ cân nhắc n-gram khi có yêu cầu substring search thật sự, và khi đó điều kiện tiên quyết là chuyển hash sang HMAC có key (4.7 mục 1) trước — n-gram trên hash thuần là công thức lộ toàn bộ plaintext.
 
 ---
 
@@ -335,7 +357,7 @@ flowchart TB
 | Thuật toán          | AES-256                                               | — (mặc định ngành)                                          |
 | Mode                | GCM cho hệ mới; CBC nếu cần deterministic             | CBC không có authenticated encryption                       |
 | IV                  | Random per-record (chuẩn) hoặc static (deterministic) | Static leak equality — đổi lấy so khớp/idempotency          |
-| Search              | Blind index prefix-token                              | Chỉ prefix; leak prefix-equality + độ dài                   |
+| Search              | Blind index prefix-token (n-gram bị loại — xem 4.8)   | Chỉ prefix; leak prefix-equality + độ dài                   |
 | Hash cho index      | HMAC có key (tốt) / hash thuần (yếu hơn)              | Hash thuần dò ngược được token ngắn                         |
 | Từ khóa dưới ngưỡng | `FALSE` — no match                                    | Không search được term ngắn — đúng chủ đích                 |
 | Dữ liệu cũ lẫn lộn  | Heuristic nhận diện + decrypt fail-safe               | Heuristic có thể đoán sai ở ca hy hữu                       |
