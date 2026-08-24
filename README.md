@@ -213,3 +213,17 @@ Ba cách vượt giới hạn single-thread của Node.js: worker_threads cho t�
 - [6. Khi nào dùng cái nào](NODE_CONCURRENCY_MODELS.md#6-khi-nào-dùng-cái-nào)
 - [7. Đối chiếu với nollie-api](NODE_CONCURRENCY_MODELS.md#7-đối-chiếu-với-nollie-api)
 - [Nguồn tham khảo](NODE_CONCURRENCY_MODELS.md#nguồn-tham-khảo)
+
+### 18. [Clean Architecture](CLEAN-ARCHITECTURE.md)
+
+Mô hình 4 lớp của Uncle Bob (Entities → Use Cases → Adapters → Frameworks), Dependency Rule, ví dụ cụ thể theo từng file cho module booking, và đối chiếu với layered architecture của nollie-api.
+
+- [1. Định nghĩa](CLEAN-ARCHITECTURE.md#1-định-nghĩa)
+- [2. Các lớp (từ trong ra ngoài)](CLEAN-ARCHITECTURE.md#2-các-lớp-từ-trong-ra-ngoài)
+- [3. Dependency Rule — quy tắc quan trọng nhất](CLEAN-ARCHITECTURE.md#3-dependency-rule--quy-tắc-quan-trọng-nhất)
+- [4. Ví dụ cụ thể — feature "booking" theo Clean Architecture](CLEAN-ARCHITECTURE.md#4-ví-dụ-cụ-thể--feature-booking-theo-clean-architecture)
+  - Cấu trúc thư mục · Luồng request qua từng file · Mã nguồn từng file · Điểm mấu chốt
+- [5. Lợi ích và cái giá](CLEAN-ARCHITECTURE.md#5-lợi-ích-và-cái-giá)
+- [6. So sánh với kiến trúc của nollie-api](CLEAN-ARCHITECTURE.md#6-so-sánh-với-kiến-trúc-của-nollie-api)
+- [7. Khi nào nên áp dụng đầy đủ](CLEAN-ARCHITECTURE.md#7-khi-nào-nên-áp-dụng-đầy-đủ)
+- [8. Tài liệu tham khảo](CLEAN-ARCHITECTURE.md#8-tài-liệu-tham-khảo)
