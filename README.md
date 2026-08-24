@@ -227,3 +227,17 @@ Mô hình 4 lớp của Uncle Bob (Entities → Use Cases → Adapters → Frame
 - [6. So sánh với kiến trúc của nollie-api](CLEAN-ARCHITECTURE.md#6-so-sánh-với-kiến-trúc-của-nollie-api)
 - [7. Khi nào nên áp dụng đầy đủ](CLEAN-ARCHITECTURE.md#7-khi-nào-nên-áp-dụng-đầy-đủ)
 - [8. Tài liệu tham khảo](CLEAN-ARCHITECTURE.md#8-tài-liệu-tham-khảo)
+
+### 19. [Bảo vệ Public API — Kỹ thuật & Áp dụng trong Booking Widget](PUBLIC-API-PROTECTION.md)
+
+Các lớp phòng thủ cho endpoint không cần đăng nhập: rate limiting nhiều tầng, chống IDOR bằng slug resolution, uniform 404, capability token, idempotency, CAPTCHA, cache chắn DB — đối chiếu trực tiếp với module `booking-widget`.
+
+- [1. Bản đồ các lớp phòng thủ](PUBLIC-API-PROTECTION.md#1-bản-đồ-các-lớp-phòng-thủ)
+- [2. Các kỹ thuật đang áp dụng trong dự án](PUBLIC-API-PROTECTION.md#2-các-kỹ-thuật-đang-áp-dụng-trong-dự-án)
+  - [Rate limiting nhiều tầng](PUBLIC-API-PROTECTION.md#21-rate-limiting-nhiều-tầng) · [Server tự resolve resource — chống IDOR](PUBLIC-API-PROTECTION.md#22-server-tự-resolve-resource--không-tin-định-danh-từ-client) · [Uniform 404](PUBLIC-API-PROTECTION.md#23-uniform-404--chống-enumeration) · [Capability token](PUBLIC-API-PROTECTION.md#24-capability-token--thay-thế-đăng-nhập-cho-khách-vãng-lai) · [Idempotency key](PUBLIC-API-PROTECTION.md#25-idempotency-key--an-toàn-trước-double-submit)
+  - [Input validation](PUBLIC-API-PROTECTION.md#26-input-validation) · [CAPTCHA](PUBLIC-API-PROTECTION.md#27-captcha--chặn-bot-ở-các-điểm-nóng) · [Caching](PUBLIC-API-PROTECTION.md#28-caching--bảo-vệ-database-khỏi-bề-mặt-đọc-public) · [Concurrency control](PUBLIC-API-PROTECTION.md#29-concurrency-control--đúng-đắn-dưới-tải-ghi-đồng-thời) · [Error handling & logging](PUBLIC-API-PROTECTION.md#210-error-handling--logging-trên-bề-mặt-public)
+- [3. Các lớp nằm ngoài tầng ứng dụng](PUBLIC-API-PROTECTION.md#3-các-lớp-nằm-ngoài-tầng-ứng-dụng)
+- [4. Các kỹ thuật phổ biến khác (tham khảo)](PUBLIC-API-PROTECTION.md#4-các-kỹ-thuật-phổ-biến-khác-dự-án-chưa-dùng--tham-khảo) — phân biệt bề mặt ẩn danh vs Internet-facing có định danh
+  - [Nhóm A — bề mặt ẩn danh](PUBLIC-API-PROTECTION.md#41-nhóm-a--dùng-được-cho-bề-mặt-ẩn-danh): [Bot detection](PUBLIC-API-PROTECTION.md#bot-detection--device-fingerprinting) · [Signed URL/JWT](PUBLIC-API-PROTECTION.md#signed-url--token-tự-chứa-có-thời-hạn) · [Query cost limiting](PUBLIC-API-PROTECTION.md#giới-hạn-chi-phí-truy-vấn-query-cost-limiting) · [Security headers](PUBLIC-API-PROTECTION.md#security-headers--https-only) · [Geo-blocking](PUBLIC-API-PROTECTION.md#geo-blocking)
+  - [Nhóm B — caller có định danh](PUBLIC-API-PROTECTION.md#42-nhóm-b--chỉ-dành-cho-caller-có-định-danh-server-to-server): [API key + quota](PUBLIC-API-PROTECTION.md#api-key--quota-theo-tier) · [HMAC signing](PUBLIC-API-PROTECTION.md#hmac-request-signing) · [Chống replay](PUBLIC-API-PROTECTION.md#chống-replay-timestamp--nonce) · [mTLS](PUBLIC-API-PROTECTION.md#mtls-mutual-tls) · [IP allowlist](PUBLIC-API-PROTECTION.md#ip-allowlist)
+- [5. Checklist khi thêm một endpoint public mới](PUBLIC-API-PROTECTION.md#5-checklist-khi-thêm-một-endpoint-public-mới)
