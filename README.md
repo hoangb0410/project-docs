@@ -266,3 +266,11 @@ Tổng hợp nhanh các cú pháp và pattern hay dùng trong GitHub Actions: tr
 - [4. `jobs` — các job và quan hệ giữa chúng](GITHUB-ACTIONS-CHEATSHEET.md#4-jobs--các-job-và-quan-hệ-giữa-chúng)
 - [5. `steps` — các bước trong một job](GITHUB-ACTIONS-CHEATSHEET.md#5-steps--các-bước-trong-1-job)
 - [6. Biến & context hay dùng](GITHUB-ACTIONS-CHEATSHEET.md#6-biến--context-hay-dùng)
+
+### 22. [TypeScript Notes](TYPESCRIPT.md)
+
+Tổng hợp kiến thức TypeScript: khác biệt với JavaScript, cơ chế compile, và các khái niệm cốt lõi (bổ sung dần).
+
+- [1. TypeScript vs JavaScript](TYPESCRIPT.md#1-typescript-vs-javascript)
+- [2. So sánh `type` và `interface`](TYPESCRIPT.md#2-so-sánh-type-và-interface)
+- [3. Tuple](TYPESCRIPT.md#3-tuple)
