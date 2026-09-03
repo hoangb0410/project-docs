@@ -58,10 +58,10 @@ flowchart TD
     L -->|"có lock"| P["LPOP tối đa 5 trang, gộp + dedup theo Id<br/>batchId = hash(danh sách Id)<br/>SETNX chống tạo lô trùng"]
     B -.->|LPOP| P
 
-    P -->|"add job chứa ~500 record thật"| Q2
+    P -->|"add job chứa 100–500 record thật (1–5 trang)"| Q2
 
     Q2[("Hàng đợi batch")]
-    Q2 -->|"concurrency ~25"| U["PROCESS_BATCH<br/>bulk upsert idempotent trong 1 transaction<br/>Lua script tăng bộ đếm processed atomic"]
+    Q2 -->|"concurrency ~8 (mặc định, đổi qua env)"| U["PROCESS_BATCH<br/>bulk upsert idempotent trong 1 transaction<br/>Lua script tăng bộ đếm processed atomic"]
     U --> DB[(Database)]
     U --> T{"processed ≥ 95% totalRows?"}
     T -->|"đủ"| NEXT["chuyển phase kế tiếp<br/>(booking sync → merge → report)"]
@@ -83,7 +83,7 @@ Nguyên tắc chung: một job kết thúc **ngay khi hàm xử lý của nó re
 |---|---|---|---|
 | `COORDINATOR` (×1) | Đọc tổng số trang, phát N phiếu fetch theo wave, hẹn giờ job vét buffer | Phát hết phiếu | Mặc định: xong giữ 2h, hỏng giữ 24h |
 | `FETCH_PAGE` (×N) | Fetch 1 trang → đẩy vào buffer → kiểm tra ngưỡng | Return sau khi push (và có thể xúc buffer); retry 2 lần, lần cuối lỗi thì return + ghi sổ trang hỏng | Ngắn hơn hẳn: xong giữ 30 phút / tối đa 100 job (vì số lượng cực lớn), hỏng giữ 24h |
-| `PROCESS_BATCH` | Bulk upsert ~500 record trong 1 transaction, tăng bộ đếm atomic, tự kiểm tra ngưỡng 95% | Commit + tăng đếm xong; lỗi thì throw, retry 3 lần (2s/4s/8s) | Xong giữ 2h, hỏng giữ 24h |
+| `PROCESS_BATCH` | Bulk upsert 100–500 record (1–5 trang, tùy buffer lúc gom) trong 1 transaction, tăng bộ đếm atomic, tự kiểm tra ngưỡng 95% | Commit + tăng đếm xong; lỗi thì throw, retry 3 lần (2s/4s/8s) | Xong giữ 2h, hỏng giữ 24h |
 | `FINAL_BUFFER_CLEANUP` (×1) | 30 giây sau khi phát hết phiếu: vét trang lẻ còn trong buffer | Buffer sạch hoặc kích hoạt force-complete; retry 5 lần, cách nhau 60s | Xong giữ 2h |
 | `FORCE_COMPLETE_IMPORT` | Đóng phiên khi phần thiếu < 1000 record và < 5% | Cập nhật trạng thái hoàn tất | **Xóa ngay khi xong** (`removeOnComplete: true`) |
 | `TRIGGER_BOOKING_SYNC_PHASE` / `TRIGGER_MERGE_PHASE` | Chuyển phase (ưu tiên cao, nhảy hàng) | Kích hoạt phase xong; throw để retry nếu lỗi | Mặc định 2h / 24h |
@@ -105,7 +105,7 @@ Biết trước tổng số trang (từ `TotalRows` của trang 1) cho phép enq
 Job fetch chỉ đẩy JSON thô vào Redis list rồi kết thúc — không chạm vào DB. Việc ghi DB do một hàng đợi khác đảm nhận, gom nhiều trang thành một lô. Lợi ích:
 
 - Tốc độ fetch không bị ghìm bởi tốc độ ghi DB (và ngược lại, DB không bị dồn ép khi API trả nhanh).
-- Kích thước lô ghi DB (~500 record/transaction) độc lập với kích thước trang API (100 record) — chi phí transaction được khấu hao tốt hơn.
+- Kích thước lô ghi DB (100–500 record/transaction, tùy số trang có trong buffer lúc gom) độc lập với kích thước trang API (100 record) — chi phí transaction được khấu hao tốt hơn.
 - Drain thích ứng: các trang đầu tiên được xử lý ngay từng trang một (người dùng thấy tiến độ sớm), về sau gom lô lớn hơn để tối ưu throughput.
 
 ### 3.3. Idempotency ở mọi tầng — điều kiện bắt buộc của xử lý song song
@@ -114,7 +114,7 @@ Song song hóa đồng nghĩa với retry, trùng lặp và race. Pipeline xử 
 
 1. **Marker theo trang**: khóa Redis `page:{n}:fetched` (TTL 24h) — job fetch bị retry sẽ không fetch lại trang đã xong.
 2. **JobId theo nội dung**: id của batch job là hash của danh sách record id đã sắp xếp — cùng một lô dữ liệu không bao giờ tạo hai job, kết hợp `SETNX` chống enqueue trùng.
-3. **Upsert phân xử bằng unique constraint**: danh tính record do ràng buộc duy nhất trên bảng mapping (`integration_type, venue_id, external_customer_id`) quyết định, không dựa vào logic kiểm tra tồn tại phía ứng dụng (vốn thua race).
+3. **Upsert phân xử bằng unique constraint**: danh tính record do ràng buộc duy nhất trên bảng mapping quyết định — partial index `uniq_cim_legacy_external` trên (`integration_type, venue_id, external_customer_id`) với điều kiện `provider_account_id IS NULL` — không dựa vào logic kiểm tra tồn tại phía ứng dụng (vốn thua race).
 4. **Bộ đếm atomic bằng Lua script**: "đánh dấu lô đã xử lý + tăng bộ đếm tiến độ" gói trong một script Redis, để một lô bị giao lại không bị đếm hai lần.
 
 Nguyên tắc rút ra: trong pipeline song song, tính đúng đắn không được phép phụ thuộc vào việc "mỗi job chỉ chạy một lần" — phải giả định mọi job đều có thể chạy lại.
@@ -125,10 +125,10 @@ Nguyên tắc rút ra: trong pipeline song song, tính đúng đắn không đư
 
 ### 3.5. Cơ chế phòng vệ tài nguyên
 
-- Kiểm tra heap trước mỗi lô (ngưỡng mềm 768MB → tự delay), gọi `global.gc()` sau mỗi lô.
+- Kiểm tra heap trước mỗi lô (ngưỡng mềm 768MB → tự delay 15 giây) — **chỉ có hiệu lực khi `NODE_ENV === 'staging'`**, production không chạy nhánh này. Gọi `global.gc()` sau mỗi lô nếu process được bật flag `--expose-gc`.
 - Circuit breaker: hàng đợi tồn quá 1000 job → giãn nhịp xử lý.
 - Delay ngẫu nhiên 0–5 giây khi enqueue batch để tránh thundering herd lên DB.
-- Watchdog định kỳ độc lập với pipeline: import ở trạng thái chạy quá 45/90 phút không có tín hiệu sống sẽ bị chuyển sang FAILED — tầng bảo hiểm cuối cùng khi mọi cơ chế bên trong đều hỏng.
+- Watchdog định kỳ độc lập với pipeline (`import-watchdog.service.ts`, cron 10 phút một lần): import ở trạng thái chạy quá 45 phút không có tín hiệu sống sẽ bị chuyển sang FAILED, tối đa 90 phút nếu còn lock — tầng bảo hiểm cuối cùng khi mọi cơ chế bên trong đều hỏng.
 
 ### 3.6. Tiến độ là một mối quan tâm hạng nhất
 
@@ -155,7 +155,7 @@ Nhánh đồng bộ booking trong cùng hệ thống vẫn dùng mô hình cũ: 
 
 ### 4.2. Lợi ích định lượng — vì sao tuần tự không sống nổi ở quy mô lớn
 
-Lấy ví dụ minh họa 1.000.000 customer = 10.000 trang, độ trễ trung bình 500ms/request:
+Lấy ví dụ minh họa 1.000.000 customer = 10.000 trang, độ trễ trung bình 500ms/request (con số giả định để thấy xu hướng, không phải quy mô venue thực tế đang vận hành):
 
 - **Tuần tự**: 10.000 × 0,5s ≈ **83 phút chỉ riêng phần fetch**, chưa tính thời gian ghi DB xen kẽ giữa các request. Độ trễ mạng của từng request cộng dồn tuyến tính vào tổng thời gian.
 - **Fan-out concurrency 20**: ≈ 10.000 / 20 × 0,5s ≈ **4–5 phút fetch**, và phần ghi DB chạy song song trên hàng đợi riêng thay vì cộng thêm vào.
@@ -187,4 +187,86 @@ Fan-out không miễn phí. Những chi phí sau là tất yếu, không phải 
 4. **Cần tầng watchdog độc lập**, vì pipeline nhiều tầng có nhiều điểm có thể treo hơn một vòng lặp đơn.
 5. **Khó đọc hơn đáng kể**: logic trải trên nhiều queue processor và nhiều khóa Redis thay vì một vòng lặp. Tài liệu hóa (như tài liệu này) là một phần của chi phí kiến trúc.
 
+Một tiền đề cần nêu rõ khi đọc các mục trên: pipeline hiện chạy trên **một process worker duy nhất** (`RUN_QUEUE=true`, ECS `hive-worker-prod` desired count 1). "Concurrency 20" và "concurrency 8" là số job chạy xen kẽ trong cùng process, không phải nhiều process cạnh tranh. Các lớp lock phân tán, SETNX và kiểm tra trùng job trong Bull được thiết kế cho kịch bản nhiều worker; ở cấu hình hiện tại chúng chủ yếu bảo vệ trước retry của chính Bull và trước việc cùng một venue bị resync chồng, chứ chưa phải trước race giữa các process. Nếu sau này tăng desired count, các lớp này trở thành bắt buộc; nếu không, chúng là chi phí trả trước cho một quy mô chưa tới.
+
 Kết luận thực dụng: mặc định bắt đầu bằng tuần tự; chuyển sang streaming fan-out khi và chỉ khi dữ liệu đủ lớn để thời gian và đặc tính lỗi của tuần tự trở thành vấn đề thực tế — và khi chuyển, phải trả đủ cả bốn khoản: idempotency, buffer, ngưỡng hoàn thành, và watchdog.
+
+---
+
+## 6. Luồng cụ thể trong nollie-api: sync customer từ ResDiary (bản rút gọn)
+
+Các mục trên trình bày mẫu thiết kế ở dạng khái quát. Mục này ánh xạ mẫu đó xuống code thực tế, chỉ giữ các bước bắt buộc để customer vào được DB. Các nhánh phụ (retry trang lỗi, force complete, merge phase, report email) được liệt kê riêng ở 6.4.
+
+Toàn bộ pipeline chạy trên **một process worker** (`RUN_QUEUE=true`, ECS `hive-worker-prod` desired count 1). Các con số concurrency là số job chạy song song bên trong process đó, không phải số process.
+
+### 6.1. Sơ đồ
+
+```mermaid
+flowchart TD
+    B[fetchCustomersFromResDiaryStreaming<br/>integrations.service.ts:3251]
+    B --> B1[Fetch trang 1 để lấy TotalRows, tính N trang]
+    B1 --> B2[Xóa key Redis cũ của venue<br/>ghi venues.importStatus = IN_PROGRESS]
+    B2 --> C
+
+    C[[integration-queue<br/>coordinator_stream_pages]]
+    C --> C1[Tạo N job fetch_resdiary_page<br/>payload chỉ có venueId, pageNumber, jobId<br/>integration.queue.ts:909]
+    C1 --> D
+
+    D[[integration-queue<br/>fetch_resdiary_page x N<br/>concurrency 20]]
+    D --> D1[GET /Customers?pageSize=100&pageNumber=n]
+    D1 --> D2[LPUSH JSON 100 customer vào<br/>Redis list job:jobId:customerBuffer<br/>integration.queue.ts:1041]
+    D2 --> D3{Buffer đủ 1 đến 3 trang?}
+    D3 -- chưa --> D
+    D3 -- đủ --> E[queueBatchProcessing<br/>LPOP tối đa 5 trang, dedup theo Id,<br/>hash nội dung thành batchId<br/>integration.queue.ts:1299]
+    E --> F
+
+    F[[customer-batch-queue<br/>process_customer_batch<br/>concurrency 8]]
+    F --> F1[bulkCreateCustomersFromResDiaryIdempotent<br/>customer.service.ts:18151]
+    F1 --> F2[Tra customer_integration_mappings theo resDiaryId<br/>tách mới / đã có]
+    F2 --> F3[Mới: bulkCreate customers + mappings + consent rows<br/>Đã có: update từng row]
+    F3 --> F4[Tăng counter Redis processedCount<br/>emit socket SYNC_CUSTOMER 0..80%]
+    F4 --> G{processedCount >= 95% TotalRows<br/>và coordinator đã xong?}
+    G -- chưa --> F
+    G -- rồi --> H[handleBookingSyncStart<br/>progress 80%, chuyển sang phase BOOKING_SYNC]
+
+    C1 -.30s sau.-> X[[FINAL_BUFFER_CLEANUP<br/>vét phần còn sót trong buffer,<br/>logic lặp lại bước E]]
+    X -.-> F
+```
+
+### 6.2. Các bước theo thứ tự
+
+| Bước | Ở đâu | Làm gì | Ghi chú |
+|---|---|---|---|
+| 1 | `integrations.service.ts:3251` | Fetch trang 1, tính N trang | pageSize cố định 100 |
+| 2 | `integrations.service.ts:3360` | Xóa khoảng 18 key Redis của venue, ghi trạng thái import vào bảng `venues` | Không có guard chống chạy chồng |
+| 3 | `integration.queue.ts:909` | Coordinator `addBulk` N job fetch, mỗi job chỉ mang số trang | Chia wave 2000 job |
+| 4 | `integration.queue.ts:1011` | Worker fetch trang, đẩy nguyên JSON vào Redis list | Trang lỗi sau 2 lần thì ghi vào set `failedPages` |
+| 5 | `integration.queue.ts:1299` | Khi buffer đủ 1 đến 3 trang, gộp tối đa 5 trang thành 1 batch, enqueue sang queue khác | Payload batch vẫn là full object |
+| 6 | `customer-batch.queue.ts:42` | Xử lý batch: lock theo batchId, upsert, đếm tiến độ bằng Lua script | Đây là bước duy nhất ghi DB |
+| 7 | `customer.service.ts:18151` | Tra mapping theo resDiaryId, mới thì bulkCreate, cũ thì update, ghi consent rows | Chỉ match theo resDiaryId, không match email/phone |
+| 8 | `customer-batch.queue.ts:196` | Batch nào thấy đủ 95% thì lấy lock và kích booking sync | Phần còn lại tối đa 5% được coi là chấp nhận mất |
+
+Hai điểm ở bước 5 hay gây khó hiểu:
+
+- **Ngưỡng gom buffer** (`integration.queue.ts:1053-1060`) tính theo `pageNumber` của trang vừa fetch: trang 1 đến 5 gom ngay từng trang để FE thấy tiến độ sớm, qua 50% tổng số trang thì gom 2 trang, còn lại gom 3 trang. Vì 20 job fetch song song nên `pageNumber` không phản ánh thứ tự hoàn thành thực tế.
+- **LPOP tối đa 5 trang**: `LPOP key count` trả về không quá `count` phần tử, và `LLEN` với `LPOP` là hai lệnh tách rời nên số trang thực nhận có thể ít hơn số đã đếm. Nếu job khác đang giữ `lock:buffer:{jobId}` (TTL 10 giây) thì job này bỏ qua, trang vừa push nằm lại buffer. Đây là lý do cần `FINAL_BUFFER_CLEANUP`.
+
+### 6.3. Trạng thái nằm ở đâu
+
+- **Redis**: `venue:{id}:resdiary:*` (processedCount, failedRows, lastProgress, completedBatches, bookingSyncLock, ...) và `job:{jobId}:*` (customerBuffer, page:n:fetched, coordinatorFinished, totalPages).
+- **DB**: `venues.importStatus`, `venues.importProgress`, `venues.importMeta` (phase, recordCount, failedPages).
+- **Socket**: `SYNC_CUSTOMER` cho FE hiển thị thanh tiến độ.
+
+### 6.4. Các nhánh phụ không nằm trong sơ đồ
+
+- `FINAL_BUFFER_CLEANUP` (`integration.queue.ts:1789`): chạy sau coordinator 30 giây, vét buffer còn sót, rồi đặt `FORCE_COMPLETE_IMPORT`.
+- `FORCE_COMPLETE_IMPORT` (`customer-batch.queue.ts:599`): nếu chưa ai đạt 95% thì tự kích booking sync với dung sai 5%.
+- `POST /resdiary/resync-failed-pages/:venueId`: enqueue lại các trang trong set `failedPages`.
+- Booking phase, merge phase (91 đến 99%), report email: chạy sau bước 8, không thuộc luồng customer.
+- Đường v1 `fetchCustomersFromResDiary` và processor `SYNC_CUSTOMER_FROM_RESDIARY` (`integration.queue.ts:134`) vẫn còn trong code nhưng không còn caller.
+
+### 6.5. Phần nào là cốt lõi, phần nào là chi phí phụ
+
+Cốt lõi thật sự chỉ gồm bước 1, 3, 4 và 7: biết có N trang, fetch từng trang, upsert theo resDiaryId. Các bước 5, 6, 8 cùng toàn bộ key Redis tồn tại để gộp 100 customer/trang thành 300 đến 500 customer/transaction, và để biết khi nào "xong" mà không cần hỏi DB.
+
+Với cấu hình vận hành hiện tại (một process, 20 fetch song song, 8 transaction song song), tầng lock phân tán và kiểm tra trùng job đang bảo vệ cho kịch bản nhiều worker cạnh tranh mà thực tế chưa có. Nếu job fetch ở bước 4 upsert luôn 100 row rồi đánh dấu trang done trong DB, bước 5, 6, 8 và phần lớn key Redis không cần tồn tại. Đây là điểm cần cân nhắc khi quyết định giữ hay rút gọn pipeline, đối chiếu với điều kiện áp dụng ở mục 4.3.
