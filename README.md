@@ -274,3 +274,16 @@ Tổng hợp kiến thức TypeScript: khác biệt với JavaScript, cơ chế 
 - [1. TypeScript vs JavaScript](TYPESCRIPT.md#1-typescript-vs-javascript)
 - [2. So sánh `type` và `interface`](TYPESCRIPT.md#2-so-sánh-type-và-interface)
 - [3. Tuple](TYPESCRIPT.md#3-tuple)
+
+### 23. [Câu hỏi phỏng vấn Frontend cơ bản](FE_INTERVIEW_QUESTIONS.md)
+
+Bộ câu hỏi phỏng vấn frontend dành cho dev backend: mỗi câu gồm ý chính cần nói, điểm hay bị hỏi xoáy và liên hệ với repo; câu đánh dấu `*` là bắt buộc phải thuộc.
+
+- [Nhóm 1. JavaScript và TypeScript nền tảng](FE_INTERVIEW_QUESTIONS.md#nhóm-1-javascript-và-typescript-nền-tảng)
+- [Nhóm 2. React cơ bản](FE_INTERVIEW_QUESTIONS.md#nhóm-2-react-cơ-bản)
+- [Nhóm 3. Quản lý data và state](FE_INTERVIEW_QUESTIONS.md#nhóm-3-quản-lý-data-và-state)
+- [Nhóm 4. Form và validation](FE_INTERVIEW_QUESTIONS.md#nhóm-4-form-và-validation)
+- [Nhóm 5. Styling và UI](FE_INTERVIEW_QUESTIONS.md#nhóm-5-styling-và-ui)
+- [Nhóm 6. Web và bảo mật](FE_INTERVIEW_QUESTIONS.md#nhóm-6-web-và-bảo-mật)
+- [Nhóm 7. Tooling và build](FE_INTERVIEW_QUESTIONS.md#nhóm-7-tooling-và-build)
+- [Mẹo trả lời cho dev backend](FE_INTERVIEW_QUESTIONS.md#mẹo-trả-lời-cho-dev-backend)
