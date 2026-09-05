@@ -73,15 +73,21 @@ Pessimistic vs optimistic locking trong PostgreSQL (FOR UPDATE, advisory lock, v
 - [4. Bẫy thực tế (đã gặp hoặc dễ gặp trong repo này)](CONCURRENCY-CONTROL.md#4-bẫy-thực-tế-đã-gặp-hoặc-dễ-gặp-trong-repo-này)
 - [5. Checklist khi viết code mới có shared write](CONCURRENCY-CONTROL.md#5-checklist-khi-viết-code-mới-có-shared-write)
 
-### 7. [Kiến trúc Streaming Fan-out cho đồng bộ dữ liệu khối lượng lớn](STREAMING-SYNC-ARCHITECTURE.md)
+### 7. [ResDiary Customer Sync — Kiến trúc streaming fan-out](STREAMING-SYNC-ARCHITECTURE.md)
 
-Mẫu thiết kế nhập dữ liệu lớn từ API bên thứ ba có phân trang: fan-out nhiều worker song song + hàng đợi trung gian + batch writer, đảm bảo nhanh, chịu lỗi và idempotent.
+Luồng sync customer từ ResDiary trên 2 Bull queue (`integration-queue` fetch API, `customer-batch-queue` ghi DB) nối bằng Redis buffer: sơ đồ producer/worker đánh số từng bước, tham số, các kỹ thuật idempotency, so sánh với mô hình tuần tự và điểm kiến trúc cần cân nhắc.
 
-- [1. Ý tưởng cốt lõi](STREAMING-SYNC-ARCHITECTURE.md#1-ý-tưởng-cốt-lõi)
-- [2. Mô hình tổng quát trong một câu](STREAMING-SYNC-ARCHITECTURE.md#2-mô-hình-tổng-quát-trong-một-câu)
-- [3. Các kỹ thuật thành phần đáng tái sử dụng](STREAMING-SYNC-ARCHITECTURE.md#3-các-kỹ-thuật-thành-phần-đáng-tái-sử-dụng)
-- [4. So sánh với mô hình tuần tự page-by-page](STREAMING-SYNC-ARCHITECTURE.md#4-so-sánh-với-mô-hình-tuần-tự-page-by-page)
-- [5. Cái giá phải trả — nhìn thẳng vào trade-off](STREAMING-SYNC-ARCHITECTURE.md#5-cái-giá-phải-trả--nhìn-thẳng-vào-trade-off)
+- [1. Bài toán và ý tưởng cốt lõi](STREAMING-SYNC-ARCHITECTURE.md#1-bài-toán-và-ý-tưởng-cốt-lõi)
+- [2. Sơ đồ tổng quan](STREAMING-SYNC-ARCHITECTURE.md#2-sơ-đồ-tổng-quan) — flowchart producer / queue / worker, đánh số ① → ⑮
+- [3. Sơ đồ tuần tự](STREAMING-SYNC-ARCHITECTURE.md#3-sơ-đồ-tuần-tự)
+- [4. Tham số chính](STREAMING-SYNC-ARCHITECTURE.md#4-tham-số-chính) — concurrency, ngưỡng gom buffer, lock, retry
+- [5. Các kỹ thuật cần hiểu](STREAMING-SYNC-ARCHITECTURE.md#5-các-kỹ-thuật-cần-hiểu)
+  - Đẩy job theo đợt · Buffer tách fetch/ghi · 4 lớp idempotency · Hoàn thành theo ngưỡng 95% · Phòng vệ tài nguyên · Tiến độ
+- [6. Các job phụ không nằm trong sơ đồ](STREAMING-SYNC-ARCHITECTURE.md#6-các-job-phụ-không-nằm-trong-sơ-đồ)
+- [7. Trạng thái nằm ở đâu](STREAMING-SYNC-ARCHITECTURE.md#7-trạng-thái-nằm-ở-đâu)
+- [8. So sánh với mô hình tuần tự](STREAMING-SYNC-ARCHITECTURE.md#8-so-sánh-với-mô-hình-tuần-tự)
+- [9. Cái giá phải trả](STREAMING-SYNC-ARCHITECTURE.md#9-cái-giá-phải-trả)
+- [10. Điểm kiến trúc cần cân nhắc](STREAMING-SYNC-ARCHITECTURE.md#10-điểm-kiến-trúc-cần-cân-nhắc) — fetch chưa cách ly khỏi job điều khiển, cốt lõi vs chi phí phụ
 
 ### 8. [Redis — Cấu trúc dữ liệu, lệnh và các pattern sử dụng thực tế](REDIS-GUIDE.md)
 
