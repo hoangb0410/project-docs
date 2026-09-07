@@ -175,6 +175,15 @@ avail:venuever:12   →   "2"
   "2"            : venue này đã đổi config 2 lần
 ```
 
+**Version nằm ở value hay ở tên key?** Cả hai, tuỳ loại key — đây là điểm dễ nhầm nhất:
+
+| Loại key | Version ở đâu | Ví dụ |
+|---|---|---|
+| 2 bộ đếm | trong **value**; tên key cố định | key `avail:ver:12:2026-09-10`, value `"3"` |
+| Key cache (projection, daydata, pacing…) | trong **tên key**, đuôi `v{số}`; value là dữ liệu | key `reservation:availability:12:2026-09-10:4:all:v2000003`, value là JSON |
+
+INCR chỉ đụng **value của 2 bộ đếm**, không bao giờ đụng key cache. Số ở đuôi tên key cache là **tính từ** value của 2 bộ đếm (mục 2b).
+
 ### 2b. Version — tính ra, không lưu
 
 **Version không được lưu thành một key riêng.** Nó là số **tính ra** từ hai bộ đếm trên, ngay lúc request đến:
