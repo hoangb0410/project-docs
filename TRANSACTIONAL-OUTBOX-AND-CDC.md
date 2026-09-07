@@ -63,7 +63,7 @@ flowchart LR
 
     REQ -->|"① COMMIT"| DB
     DB <-->|"② SELECT row PENDING<br/>claim: PENDING → PUBLISHING"| C1
-    C2 -->|"bất kỳ lúc nào: UPDATE row PUBLISHING<br/>kẹt > 5 phút → PENDING, để ② lấy lại"| DB
+    C2 -->|"bất&nbsp;kỳ&nbsp;lúc&nbsp;nào:&nbsp;UPDATE&nbsp;row&nbsp;(PUBLISHING&nbsp;kẹt&nbsp;>&nbsp;5&nbsp;phút)&nbsp;→&nbsp;PENDING,&nbsp;để&nbsp;②&nbsp;lấy&nbsp;lại"| DB
     C1 -->|"③ sendMessage { outboxId, venueId }"| Q
     W <-->|"⑤ SELECT row theo outboxId, DONE → no-op<br/>⑦ ghi kết quả: DONE | FAILED + last_error"| DB
 ```
