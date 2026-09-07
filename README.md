@@ -32,13 +32,14 @@ Lý thuyết ngắn về scope của provider trong NestJS và các vector gây 
 
 ### 3. [Transactional Outbox & Change Data Capture (CDC)](TRANSACTIONAL-OUTBOX-AND-CDC.md)
 
-Hai kỹ thuật đảm bảo data consistency khi một service phải vừa ghi DB vừa phát event, kèm ví dụ thực tế từ module `venue-registry` của nollie-api.
+Hai kỹ thuật đảm bảo data consistency khi một service phải vừa ghi DB vừa phát event, kèm ví dụ thực tế từ module `venue-registry` của nollie-api. Có sơ đồ mermaid: flowchart tổng quan + sequence diagram cho luồng outbox (2 cron relay độc lập, consumer idempotent), và sơ đồ so sánh Outbox / CDC / Outbox + CDC relay.
 
 - [1. Bài toán gốc: Dual-Write Problem](TRANSACTIONAL-OUTBOX-AND-CDC.md#1-bài-toán-gốc-dual-write-problem)
 - [2. Transactional Outbox Pattern](TRANSACTIONAL-OUTBOX-AND-CDC.md#2-transactional-outbox-pattern)
+  - [2.1 Lý thuyết](TRANSACTIONAL-OUTBOX-AND-CDC.md#21-lý-thuyết) · [2.2 Bảng outbox gồm những gì](TRANSACTIONAL-OUTBOX-AND-CDC.md#22-bảng-outbox-gồm-những-gì) · [2.3 Ví dụ trong nollie-api: venue-registry](TRANSACTIONAL-OUTBOX-AND-CDC.md#23-ví-dụ-trong-nollie-api-venue-registry) · [2.4 Trade-off của cách cài trong repo](TRANSACTIONAL-OUTBOX-AND-CDC.md#24-trade-off-của-cách-cài-trong-repo)
 - [3. Change Data Capture (CDC)](TRANSACTIONAL-OUTBOX-AND-CDC.md#3-change-data-capture-cdc)
+  - [3.1 Lý thuyết](TRANSACTIONAL-OUTBOX-AND-CDC.md#31-lý-thuyết) · [3.2 Nếu venue-registry dùng CDC thì trông thế nào?](TRANSACTIONAL-OUTBOX-AND-CDC.md#32-nếu-venue-registry-dùng-cdc-thì-trông-thế-nào) · [3.3 Kết hợp hay nhất của cả hai: Outbox + CDC relay](TRANSACTIONAL-OUTBOX-AND-CDC.md#33-kết-hợp-hay-nhất-của-cả-hai-outbox--cdc-relay)
 - [4. So sánh nhanh](TRANSACTIONAL-OUTBOX-AND-CDC.md#4-so-sánh-nhanh)
-- [5. Đọc thêm trong repo](TRANSACTIONAL-OUTBOX-AND-CDC.md#5-đọc-thêm-trong-repo)
 
 ### 4. [Mã hóa dữ liệu PII & Search trên dữ liệu mã hóa](PII-ENCRYPTION-THEORY.md)
 

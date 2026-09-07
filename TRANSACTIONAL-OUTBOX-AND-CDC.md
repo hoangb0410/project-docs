@@ -36,20 +36,77 @@ Hai lời giải phổ biến: **Transactional Outbox** (application-level) và 
 
 **Ý tưởng:** đổi bài toán "ghi 2 nơi atomic" (bất khả thi) thành "ghi 1 nơi atomic + chuyển phát lại tin cậy". Thay vì ghi trực tiếp sang hệ thống thứ hai, ta ghi **ý định** (event) vào bảng `outbox` **trong cùng transaction** với dữ liệu nghiệp vụ. Vì cùng một DB, atomicity là tuyệt đối: hoặc cả venue lẫn event cùng tồn tại, hoặc cả hai cùng không. Phần gửi đi qua network giao cho tiến trình nền retry đến khi thành công — cái giá là hệ thống đích trễ hơn DB nguồn một khoảng (**eventual consistency**).
 
+Điểm quan trọng: request, hai cron và consumer **không gọi nhau** — chúng chạy độc lập theo nhịp riêng, và chỉ "gặp nhau" qua bảng `venue_registry_outbox`. Sơ đồ tổng quan (bảng outbox ở giữa, mọi bên chỉ cắm vào bảng; nét đứt là nhánh lỗi):
+
+```mermaid
+flowchart LR
+    subgraph REQ["Request createVenue — 1 Postgres transaction"]
+        direction TB
+        A["INSERT venues"] --> B["INSERT venue_registry_outbox<br/>status = PENDING"]
+    end
+
+    DB[("bảng venue_registry_outbox<br/>status: PENDING · PUBLISHING<br/>DONE · FAILED")]
+
+    subgraph RELAY["Tầng relay — 2 cron độc lập"]
+        direction TB
+        C1(("Cron 1<br/>relayPendingRows<br/>mỗi 30s"))
+        C2(("Cron 2<br/>resetStuckRows<br/>mỗi 5 phút"))
+        C1 ~~~ C2
+    end
+
+    subgraph PROC["Tầng xử lý"]
+        direction TB
+        Q["SQS"] -->|"④ deliver at-least-once"| W["Consumer<br/>SQS listener"]
+        W -->|"⑥ conditional PutItem / rename"| DY[("DynamoDB<br/>venue-registry")]
+        W -. "⑥ lỗi transient: attempts + 1<br/>throw → redeliver về ④" .-> Q
+    end
+
+    REQ -->|"① COMMIT"| DB
+    DB <-->|"② SELECT row PENDING<br/>claim: PENDING → PUBLISHING"| C1
+    C2 -->|"bất kỳ lúc nào: UPDATE row PUBLISHING<br/>kẹt > 5 phút → PENDING, để ② lấy lại"| DB
+    C1 -->|"③ sendMessage { outboxId, venueId }"| Q
+    W <-->|"⑤ SELECT row theo outboxId, DONE → no-op<br/>⑦ ghi kết quả: DONE | FAILED + last_error"| DB
 ```
-┌────────────────── 1 Postgres transaction ──────────────────┐
-│  INSERT INTO venues (...)                                  │
-│  INSERT INTO venue_registry_outbox (..., status=PENDING)   │
-└──────────────────────── COMMIT ────────────────────────────┘
-                             │
-                             ▼
-              Relay (poller hoặc CDC) đọc outbox
-                             │
-                             ▼
-                    Message broker (SQS)
-                             │
-                             ▼
-          Consumer idempotent → ghi hệ thống đích
+
+Chi tiết theo thời gian, thấy rõ từng bên tự chạy trong `loop` riêng:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as createVenue<br/>(request)
+    participant DB as Postgres<br/>venues + venue_registry_outbox
+    participant C1 as Cron 1<br/>relayPendingRows
+    participant C2 as Cron 2<br/>resetStuckRows
+    participant Q as SQS
+    participant W as Consumer<br/>(SQS listener)
+    participant DY as DynamoDB<br/>venue-registry
+
+    App->>DB: BEGIN → INSERT venues → INSERT outbox (status = PENDING) → COMMIT
+    Note over DB: row PENDING nằm trong bảng, chờ được quét.<br/>Request kết thúc ở đây, không gọi gì thêm.
+
+    loop mỗi 30s, tự chạy trên mọi instance
+        C1->>DB: SELECT row PENDING (limit 100, FIFO theo created_at)
+        C1->>DB: UPDATE status = PUBLISHING WHERE id AND status = PENDING (claim)
+        C1->>Q: sendMessage { outboxId, venueId }
+    end
+
+    Q->>W: deliver (at-least-once, có thể trùng)
+    W->>DB: SELECT row theo outboxId
+    Note over W: status = DONE → return, no-op (idempotency)
+    W->>DY: conditional PutItem / rename
+    alt ghi OK
+        W->>DB: UPDATE status = DONE, processed_at
+    else đích từ chối vĩnh viễn (slug đã thuộc venue khác)
+        W->>DB: UPDATE status = FAILED, last_error
+    else lỗi transient (network, throttle)
+        W->>DB: UPDATE attempts + 1 WHERE status ≠ DONE
+        W-->>Q: throw → SQS redeliver
+    end
+
+    loop mỗi 5 phút, tự chạy, không liên quan Cron 1
+        C2->>DB: UPDATE status = PENDING WHERE status = PUBLISHING AND updated_at < now − 5 phút
+        Note over C2: cứu row bị kẹt khi Cron 1 chết sau claim,<br/>trước khi gửi SQS. Lần quét sau Cron 1 sẽ lấy lại.
+    end
 ```
 
 Ba thành phần bắt buộc:
@@ -77,17 +134,7 @@ Một bảng outbox điển hình có 4 nhóm cột — lấy chính `venue_regi
 
 Nguyên tắc thiết kế payload: **row phải tự chứa đủ dữ liệu để xử lý lại về sau** (self-contained). Ví dụ event `rename` lưu cả `previous_slug` — nếu chỉ lưu slug mới rồi đọc bảng `venues` lúc xử lý, slug cũ đã bị ghi đè mất, không biết phải xóa entry nào trong Dynamo.
 
-**Các status và vòng đời:**
-
-```
-             relay claim          gửi SQS + consumer xử lý OK
-  PENDING ──────────────▶ PUBLISHING ──────────────▶ DONE
-     ▲                        │
-     │   kẹt > 5 phút         │
-     └────────────────────────┘        đích từ chối vĩnh viễn
-                                       (vd slug bị venue khác giữ)
-  PENDING/PUBLISHING ─────────────────────────────▶ FAILED
-```
+**Các status và vòng đời** (các bước chuyển đã vẽ trong sơ đồ ở 2.1 — `PENDING → PUBLISHING → DONE | FAILED`, cộng nhánh cứu hộ `PUBLISHING → PENDING` khi kẹt quá 5 phút):
 
 | Status       | Nghĩa                                                                   | Ai chuyển vào                                                                       |
 | ------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -198,9 +245,12 @@ Hai tầng này bổ trợ nhau: outbox đảm bảo _"event chắc chắn tới
 
 Mọi DB ghi thay đổi vào log trước khi áp dụng (Postgres: WAL, MySQL: binlog, DynamoDB/Mongo: Streams/oplog). CDC tool "tail" log này:
 
-```
-App ──INSERT/UPDATE/DELETE──▶ Postgres ──WAL──▶ Debezium ──▶ Kafka/Kinesis ──▶ Consumers
-                                                (CDC connector)
+```mermaid
+flowchart LR
+    App -->|INSERT / UPDATE / DELETE| PG["Postgres"]
+    PG -->|WAL| CDC["CDC connector<br/>(Debezium, DMS...)"]
+    CDC --> Broker["Kafka / Kinesis"]
+    Broker --> Consumers
 ```
 
 Công cụ phổ biến:
@@ -219,22 +269,34 @@ Tính chất:
 
 ### 3.2 Nếu venue-registry dùng CDC thì trông thế nào?
 
-Phương án tương đương với flow hiện tại:
+Đặt cạnh nhau ba phương án: flow hiện tại (A), CDC thuần (B), và biến thể kết hợp ở 3.3 (C). Chỗ khác nhau nằm ở tầng relay (cột thứ hai) và ở việc consumer nhận được business event hay row diff:
 
-```
-INSERT venues (Postgres)
-   │  WAL
-   ▼
-Debezium / DMS  ──▶  Kinesis/SQS  ──▶  Consumer ghi DynamoDB
+```mermaid
+flowchart LR
+    subgraph A["A. Hiện tại — Outbox + polling relay"]
+        A1["INSERT venues<br/>+ INSERT outbox<br/>(1 transaction)"] --> A2["Cron 30s<br/>poll row PENDING"]
+        A2 --> A3["SQS"]
+        A3 --> A4["Consumer<br/>nhận event UPSERT / RENAME<br/>→ ghi DynamoDB"]
+    end
+    subgraph B["B. CDC thuần"]
+        B1["INSERT venues<br/>(không có outbox)"] -->|WAL| B2["Debezium / DMS<br/>tail bảng venues"]
+        B2 --> B3["Kinesis / SQS"]
+        B3 --> B4["Consumer<br/>tự suy diff cột slug<br/>→ ghi DynamoDB"]
+    end
+    subgraph C["C. Outbox + CDC relay"]
+        C1["INSERT venues<br/>+ INSERT outbox<br/>(1 transaction)"] -->|WAL| C2["Debezium<br/>tail bảng outbox"]
+        C2 --> C3["Kinesis / SQS"]
+        C3 --> C4["Consumer<br/>nhận event UPSERT / RENAME<br/>→ ghi DynamoDB"]
+    end
 ```
 
-Application chỉ cần insert venue — không cần bảng outbox, không cần cron relay. Đổi lại: phải vận hành connector trên RDS cả 2 region, và consumer phải tự suy ra "slug đổi" từ diff của row `venues` (so sánh before/after cột `slug`), thay vì nhận event `RENAME` có sẵn `previousSlug` như outbox hiện tại.
+Với phương án B, application chỉ cần insert venue — không cần bảng outbox, không cần cron relay. Đổi lại: phải vận hành connector trên RDS cả 2 region, và consumer phải tự suy ra "slug đổi" từ diff của row `venues` (so sánh before/after cột `slug`), thay vì nhận event `RENAME` có sẵn `previousSlug` như outbox hiện tại.
 
 Một chỗ CDC _đã_ hiện diện gián tiếp trong kiến trúc này: `venue-registry` là **DynamoDB Global Table**, và việc replicate AU ↔ UK giữa các region chính là AWS chạy CDC (DynamoDB Streams) hộ mình.
 
 ### 3.3 Kết hợp hay nhất của cả hai: Outbox + CDC relay
 
-Hai pattern không loại trừ nhau. Biến thể được Debezium khuyến nghị (outbox event router): **vẫn ghi bảng outbox trong transaction** (giữ được business event có ngữ nghĩa, có `eventType`, `previousSlug`...), nhưng **relay bằng CDC tail bảng outbox** thay vì cron poll — được cả độ trễ sub-second lẫn event ngữ nghĩa, bỏ được poller. Repo hiện chọn cron poll vì đơn giản và 30s là quá đủ cho tần suất thay đổi slug; nếu sau này cần độ trễ thấp, chỉ cần thay tầng relay, phần ghi outbox và consumer giữ nguyên.
+Hai pattern không loại trừ nhau. Biến thể được Debezium khuyến nghị (outbox event router — nhánh C trong sơ đồ 3.2): **vẫn ghi bảng outbox trong transaction** (giữ được business event có ngữ nghĩa, có `eventType`, `previousSlug`...), nhưng **relay bằng CDC tail bảng outbox** thay vì cron poll — được cả độ trễ sub-second lẫn event ngữ nghĩa, bỏ được poller. Repo hiện chọn cron poll vì đơn giản và 30s là quá đủ cho tần suất thay đổi slug; nếu sau này cần độ trễ thấp, chỉ cần thay tầng relay, phần ghi outbox và consumer giữ nguyên.
 
 ---
 
