@@ -232,7 +232,7 @@ WHERE stored_tokens ⊇ search_tokens
 -- ⊇ = "chứa toàn bộ": mảng stored_tokens của row phải chứa mọi phần tử của search_tokens
 ```
 
-Row khớp ⟺ `stored_tokens` của row **chứa toàn bộ** `search_tokens` ⟺ giá trị gốc bắt đầu bằng từ khóa. Row `"Charles"` khớp vì cả `hash("cha")` và `hash("char")` đều nằm trong `stored_tokens`; row `"Chad"` không khớp vì `stored_tokens` của nó là `[hash("cha"), hash("chad")]`, thiếu `hash("char")`. Đúng ngữ nghĩa `LIKE 'char%'` mà DB không hề biết plaintext. Trên Postgres, phép containment này map thẳng vào toán tử JSONB `@>`:
+Row khớp ⟺ `stored_tokens` của row **chứa toàn bộ** `search_tokens` ⟺ giá trị gốc bắt đầu bằng từ khóa. Row `"Charles"` khớp vì cả `hash("cha")` và `hash("char")` đều nằm trong `stored_tokens`; row `"Chad"` không khớp vì `stored_tokens` của nó là `[hash("cha"), hash("chad")]`, thiếu `hash("char")`. Đúng ngữ nghĩa `LIKE 'char%'` mà DB không hề biết plaintext. Trên Postgres, phép containment này map thẳng vào toán tử JSONB `@>` (toán tử "contains": `A @> B` đúng khi A chứa toàn bộ B, tương đương `A ⊇ B`):
 
 ```sql
 WHERE first_name_tokens @> '["9f86d081884c7d65", "1ba7..."]'::jsonb
