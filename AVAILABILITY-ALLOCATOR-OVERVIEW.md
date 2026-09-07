@@ -22,7 +22,7 @@ Mô hình tổng thể: **một engine tính availability duy nhất** (`reserva
 | **projection** | **kết quả cuối** của availability cho một ngày: mảng `[{ time: "18:00", status: "AVAILABLE" }, { time: "18:15", status: "WAITLIST" }, ...]` cho **mọi slot trong ngày**. Đây là thứ được cache và được trả về cho user (sau khi filter ±3.5h) |
 | **version** | một số nguyên gắn vào tên key cache. Đổi số → đổi tên key → cache cũ bị bỏ. Xem mục 2 |
 | **dateVer** | bộ đếm **theo ngày**: `avail:ver:{venueId}:{date}`. Tăng 1 mỗi khi có booking/hold/cancel trong ngày đó |
-| **venueVer** | bộ đếm **theo venue**: `avail:venuever:{venueId}`. Tăng 1 mỗi khi admin sửa config ảnh hưởng mọi ngày (service, table combination, promotion, venue booking config) |
+| **venueVer** | bộ đếm **theo venue**: `avail:venuever:{venueId}`. Tăng 1 mỗi khi admin sửa config ảnh hưởng mọi ngày: table, area, closeout, service, table combination, promotion, venue booking config |
 | **INCR** | lệnh Redis: cộng 1 vào số trong key. Key chưa có → thành 1 |
 | **TTL** | thời gian sống của key trong Redis, hết thì Redis tự xoá |
 | **pacing** | giới hạn **số covers** — còn quota nhận thêm khách không |
@@ -220,8 +220,8 @@ Hai chỗ trong code gọi INCR:
 
 | Sự kiện | Lệnh | Version đổi thế nào |
 |---|---|---|
-| Book / hold / cancel / move trong ngày 2026-09-10 | `INCR avail:ver:12:2026-09-10` → 3 thành 4 | `2 × 1000000 + 4 = 2000004` — chỉ ngày này đổi |
-| Admin sửa service / combination / promotion / config của venue 12 | `INCR avail:venuever:12` → 2 thành 3 | `3 × 1000000 + 3 = 3000003` — **mọi ngày** của venue 12 đều đổi, vì ngày nào cũng đọc chung `avail:venuever:12` |
+| Book / hold / cancel / move / seat từ waitlist trong ngày 2026-09-10 | `INCR avail:ver:12:2026-09-10` → 3 thành 4 | `2 × 1000000 + 4 = 2000004` — chỉ ngày này đổi |
+| Admin sửa table / area / closeout / service / combination / promotion / config của venue 12 | `INCR avail:venuever:12` → 2 thành 3 | `3 × 1000000 + 3 = 3000003` — **mọi ngày** của venue 12 đều đổi, vì ngày nào cũng đọc chung `avail:venuever:12` |
 
 Nếu chỉ có bộ đếm theo ngày, admin sửa service sẽ phải INCR 90 key cho 90 ngày trong booking window. Nên có thêm một bộ đếm theo venue, INCR một lần là mọi ngày đổi version.
 
@@ -354,7 +354,7 @@ flowchart TD
 | ③ | Chưa có → nhiều request có thể đang cùng miss. Giành quyền compute bằng cách tạo key lock; chỉ request tạo được là thắng. Thua → cứ 75ms đọc lại key ở ② một lần, tối đa 80 lần (~6s); có thì dùng, không có thì lấy bản dự phòng rồi trả về | tạo `...:v2000003:lock` sống 15s · thua thì đọc `...:stale:12:2026-09-10:4:all` |
 | ④ | Thắng → lấy toàn bộ dữ liệu của ngày (dayData): config, services, tables, areas, table combinations, closeouts, bookings, spans, holds. Chưa có trong Redis → 11 query DB chạy song song → ghi vào Redis | đọc / ghi `allocator:daydata:12:2026-09-10:v2000003` sống 60s |
 | ⑤ | Với mỗi service trong ngày: tổng covers đã nhận cả ca (booking + hold). Chưa có trong Redis → SUM từ DB → ghi vào Redis | đọc / ghi `pacing:12:2026-09-10:svc:7:v2000003` sống 60s |
-| ⑥ | Sinh slot grid cho từng service (bước nhảy = slot interval, fallback area config → service → venue → 15'; xử lý ca qua đêm và `lastBookingTime`). Với mỗi slot: hỏi Pacing rồi Table-aware → ra status AVAILABLE / WAITLIST / UNAVAILABLE (chi tiết 3b) | — |
+| ⑥ | Sinh slot grid cho từng service (danh sách giờ có thể đặt — chi tiết 3b). Với mỗi slot: hỏi Pacing rồi Table-aware → ra status AVAILABLE / WAITLIST / UNAVAILABLE (chi tiết 3c) | — |
 | ⑦ | Ghi kết quả cả ngày vào Redis. Ghi thêm một bản dự phòng không gắn version. Xoá key lock | ghi key ở ② sống 60s · ghi `...:stale:...` sống 300s · xoá `...:lock` |
 | ⑧ | Cắt lấy các slot trong ±3.5h quanh giờ user chọn (19:00 → 15:30 đến 22:30) → trả về | — |
 
@@ -362,7 +362,61 @@ Response widget chỉ là `{ time, status, hasPromotion, turnTimeMinutes }` — 
 
 `findNextAvailable` (tìm ngày gần nhất còn chỗ) chạy lại đúng luồng trên cho từng ngày: tối đa 14 ngày, batch 4 ngày song song, budget 8s — mỗi ngày đều hưởng cache riêng của ngày đó.
 
-### 3b. Step ⑥ chi tiết — trạng thái một slot
+### 3b. Slot grid — danh sách giờ của một ngày lấy từ đâu
+
+Slot grid là **danh sách các giờ có thể đặt** trong ngày, sinh ra từ config của service, **chưa liên quan gì đến pacing hay bàn**. Đây là input của step ⑥: mỗi giờ trong grid sẽ được hỏi Pacing rồi Table-aware.
+
+Mỗi service sinh grid riêng. Ví dụ ngày 2026-09-10 (thứ Năm) có Lunch 11:00–14:00 và Dinner 17:00–22:00 → hai grid, sau đó gộp lại theo giờ thành một danh sách.
+
+**Input** — lấy từ `reservation_service` và `reservation_venue_booking_config` trong dayData:
+
+| Tham số | Lấy ở đâu | Ví dụ Dinner |
+|---|---|---|
+| `startTime`, `endTime` | service | 17:00, 22:00 |
+| `daysOfWeek` | service | [1,2,3,4,5,6,0] |
+| `lastBookingTime` | service, có thể null | 21:00 |
+| `slotInterval` | area config → service → venue config → 15 | 15 phút |
+| `turnTime` | party rule → area config → service → venue `defaultDuration` → 90 | 90 phút |
+| `buffer` | service → venue config → 15 | 15 phút |
+| `leadTimeMinutes`, `bookingWindowDays` | venue config | 120 phút, 90 ngày |
+
+**Cách sinh**, cho một service:
+
+```
+1. Service có chạy ngày này không?
+   daysOfWeek phải chứa thứ của ngày đang hỏi. Không → grid rỗng.
+
+2. Slot cuối cùng được đặt là mấy giờ?
+   Widget:  latestStart = endTime − turnTime       → 22:00 − 90' = 20:30
+            (giữ trọn một bữa trước giờ đóng: khách 20:30 ăn xong đúng 22:00)
+            nếu service có lastBookingTime → lấy min(lastBookingTime, 20:30)
+   Staff:   latestStart = endTime − buffer         → 22:00 − 15' = 21:45
+            (staff xếp tay, được chạy quá giờ đóng, chỉ chừa buffer)
+
+3. Nhảy từ startTime tới latestStart theo slotInterval:
+   Widget:  17:00, 17:15, 17:30, ... 20:15, 20:30    → 15 slot
+   Staff:   17:00, 17:15, 17:30, ... 21:30, 21:45    → 20 slot
+
+4. Bỏ giờ không tồn tại do đổi giờ DST (spring-forward xoá một tiếng).
+   Phải BỎ, không được dịch — dịch sẽ trùng label với slot thật một tiếng sau,
+   covers ở pacing tier 2 bị cộng dồn vào một slot.
+
+5. Chỉ widget — bỏ slot ngoài khung được đặt online:
+   bỏ slot < now + leadTimeMinutes     (hỏi lúc 15:30 hôm nay → bỏ mọi slot trước 17:30)
+   bỏ slot > now + bookingWindowDays   (quá 90 ngày → ngày đó không có slot nào)
+```
+
+**Kết quả**: mảng `[{ serviceId, time }]`, ví dụ `[{7, "17:00"}, {7, "17:15"}, ... {7, "20:30"}]`.
+
+**Service qua đêm** (`startTime > endTime`, ví dụ Bar 20:00–02:00): coi `endTime` là 26:00, sinh grid tới 26:00 − turnTime rồi đổi lại thành 00:xx, 01:xx. Phần đuôi sau nửa đêm được tính là **của đêm hôm trước** — check `daysOfWeek` bằng thứ của ngày bắt đầu, không phải ngày kết thúc.
+
+**Hai service chồng giờ** (Dinner 17:00–22:00 và Bar 20:00–02:00 cùng có slot 20:00): grid sinh riêng, step ⑥ chấm status riêng cho từng cặp (service, slot), rồi gộp lại một dòng cho giờ 20:00 — status tốt nhất thắng (AVAILABLE > WAITLIST > UNAVAILABLE), `turnTimeMinutes` lấy theo service có `displayOrder` nhỏ hơn (đó cũng là service sẽ được gán khi tạo hold).
+
+Đây là lý do **widget luôn thấy ít slot hơn staff** cho cùng một service, và **slot cuối của widget lệch theo turn time**: party 2 người turnTime 90' thấy tới 20:30, party 8 người có rule turnTime 150' chỉ thấy tới 19:30.
+
+**Grid có cache riêng không?** Không. Grid chỉ phụ thuộc config (đã nằm trong dayData) và `now`, tính lại rất rẻ, nên mỗi lần compute (step ④–⑦) là sinh lại. Kết quả của nó nằm gián tiếp trong projection `reservation:availability:...:v{N}`. Hệ quả: một hold vào ngày 2026-09-10 làm version của ngày đó đổi → request sau compute lại toàn bộ, **kể cả sinh lại grid dù grid không đổi**. Sửa table / area / closeout / service làm version venue đổi → mọi ngày compute lại. Không có invalidate "một phần" — version đổi là toàn bộ cache của phạm vi đó bị bỏ.
+
+### 3c. Step ⑥ chi tiết — trạng thái một slot
 
 Thứ tự kiểm tra, dừng ở điểm đầu tiên fail:
 
