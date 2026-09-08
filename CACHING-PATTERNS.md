@@ -120,6 +120,86 @@ version = venueVersion * 1_000_000 + dateVersion;
 
 Data TTL 60s, version TTL 48h. Comment trong code ghi rõ pattern này **thay thế vòng SCAN+DEL cũ** — chính là bài học "cách ngây thơ" ở trên, dự án đã trả giá bằng một lần refactor.
 
+### Luồng đầy đủ trong dự án: GET và INVALIDATE
+
+**Reader** (`reservation-allocator.service.ts` → `getWidgetAvailability` / `computeDayProjection`). Version không nằm trong request — reader ghép tên key version từ `venueId` + `date` (tên cố định), `GET` từ Redis, rồi mới ghép ra tên key data (tên biến đổi theo version):
+
+```mermaid
+flowchart TD
+    REQ(["GET /availability<br/>venueId, date, partySize"]) --> EX{"Có excludeReservation<br/>(guest sửa booking)?"}
+    EX -- "có" --> BYPASS["Bỏ qua cache,<br/>tính thẳng từ DB (mục 7)"] --> OUT0(["Trả về"])
+    EX -- "không" --> VER["dateVersion = GET avail:ver:{venue}:{date}<br/>venueVersion = GET avail:venuever:{venue}<br/>(song song, null → 0)"]
+    VER --> COMPOSE["version = venueVersion * 1_000_000 + dateVersion"]
+    COMPOSE --> KEY["cacheKey = reservation:availability<br/>:{venue}:{date}:{party}:all:v{version}"]
+    KEY --> GET["GET cacheKey"]
+    GET -- "HIT" --> OUT1(["Trả JSON slots"])
+    GET -- "MISS" --> LOCK{"SETNX cacheKey:lock<br/>token, TTL 15s"}
+
+    subgraph WIN ["Winner — duy nhất 1 request"]
+        direction TB
+        COMPUTE["computeAvailability()<br/>query DB, chạy 1 lần"]
+        COMPUTE --> SET1["SET cacheKey = slots (TTL 60s)"]
+        SET1 --> SET2["SET staleKey = slots (TTL 300s)<br/>staleKey không có v{version}"]
+        SET2 --> REL["DEL lock nếu token khớp"]
+        REL --> OUT2(["Trả về"])
+    end
+
+    subgraph LOSE ["Loser — mọi request còn lại"]
+        direction TB
+        POLL{"Poll GET cacheKey<br/>80 lần × 75ms"}
+        POLL -- "có data" --> OUT3(["Trả về, không chạm DB"])
+        POLL -- "timeout" --> STALE{"GET staleKey"}
+        STALE -- "có" --> OUT4(["Trả bản cũ"])
+        STALE -- "không" --> SELF["Tự tính như winner<br/>(fail-open, không giữ lock)"]
+        SELF --> OUT5(["Trả về"])
+    end
+
+    LOCK -- "giành được lock<br/>(Redis trả OK)" --> COMPUTE
+    LOCK -- "lock đã có người giữ<br/>(Redis trả nil)" --> POLL
+```
+
+Nhánh miss → lock → poll → stale là single-flight, giải thích chi tiết ở mục 4. Mọi nhánh đều kết thúc bằng dữ liệu, không nhánh nào trả lỗi vì cache.
+
+**Writer** (`reservation.service.ts`, `reservation-hold.service.ts`, `reservation-waitlist.service.ts`). Không `DEL` key data nào, chỉ `INCR` counter. Ba hàm cùng cơ chế, khác counter:
+
+| Hàm                  | Counter bị `INCR`             | Ai gọi                                            |
+| -------------------- | ----------------------------- | ------------------------------------------------- |
+| `invalidateForDate`  | `avail:ver:{venue}:{date}`    | Reservation, hold, waitlist — khoảng 20 call site |
+| `invalidateForVenue` | `avail:venuever:{venue}`      | Admin sửa service, area, booking config           |
+| `invalidateExtras`   | `extras:ver:{venue}`          | Admin sửa extras                                  |
+
+**Hai luồng gặp nhau** — writer bump sau commit, reader kế tiếp tự miss và tính lại:
+
+```mermaid
+sequenceDiagram
+    participant R as Reader
+    participant Redis
+    participant W as Writer (booking create)
+    participant DB
+
+    R->>Redis: GET avail:ver:12:2026-09-09
+    Redis-->>R: 5
+    R->>Redis: GET reservation:availability:12:2026-09-09:4:all:v5
+    Redis-->>R: HIT → slots cũ (19:00 còn trống)
+
+    W->>DB: BEGIN → INSERT reservation → COMMIT
+    Note over W: chỉ sau khi commit mới đi tiếp (mục 6b)
+    W->>Redis: INCR avail:ver:12:2026-09-09
+    Redis-->>W: 6
+    W->>Redis: EXPIRE avail:ver:12:2026-09-09 172800
+    opt booking qua nửa đêm
+        W->>Redis: INCR avail:ver:12:2026-09-10
+    end
+
+    R->>Redis: GET avail:ver:12:2026-09-09
+    Redis-->>R: 6
+    R->>Redis: GET reservation:availability:12:2026-09-09:4:all:v6
+    Redis-->>R: MISS
+    R->>R: single-flight → tính lại → 19:00 đã hết
+    R->>Redis: SET ...:v6 = slots mới (TTL 60s)
+    Note over Redis: ...:v5 vẫn nằm đó, không ai đọc nữa,<br/>tự hết hạn sau 60s
+```
+
 ---
 
 ## 4. Cache Stampede & Single-Flight Lock
