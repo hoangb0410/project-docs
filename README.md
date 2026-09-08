@@ -32,13 +32,14 @@ Lý thuyết ngắn về scope của provider trong NestJS và các vector gây 
 
 ### 3. [Transactional Outbox & Change Data Capture (CDC)](TRANSACTIONAL-OUTBOX-AND-CDC.md)
 
-Hai kỹ thuật đảm bảo data consistency khi một service phải vừa ghi DB vừa phát event, kèm ví dụ thực tế từ module `venue-registry` của nollie-api.
+Hai kỹ thuật đảm bảo data consistency khi một service phải vừa ghi DB vừa phát event, kèm ví dụ thực tế từ module `venue-registry` của nollie-api. Có sơ đồ mermaid: flowchart tổng quan + sequence diagram cho luồng outbox (2 cron relay độc lập, consumer idempotent), và sơ đồ so sánh Outbox / CDC / Outbox + CDC relay.
 
 - [1. Bài toán gốc: Dual-Write Problem](TRANSACTIONAL-OUTBOX-AND-CDC.md#1-bài-toán-gốc-dual-write-problem)
 - [2. Transactional Outbox Pattern](TRANSACTIONAL-OUTBOX-AND-CDC.md#2-transactional-outbox-pattern)
+  - [2.1 Lý thuyết](TRANSACTIONAL-OUTBOX-AND-CDC.md#21-lý-thuyết) · [2.2 Bảng outbox gồm những gì](TRANSACTIONAL-OUTBOX-AND-CDC.md#22-bảng-outbox-gồm-những-gì) · [2.3 Ví dụ trong nollie-api: venue-registry](TRANSACTIONAL-OUTBOX-AND-CDC.md#23-ví-dụ-trong-nollie-api-venue-registry) · [2.4 Trade-off của cách cài trong repo](TRANSACTIONAL-OUTBOX-AND-CDC.md#24-trade-off-của-cách-cài-trong-repo)
 - [3. Change Data Capture (CDC)](TRANSACTIONAL-OUTBOX-AND-CDC.md#3-change-data-capture-cdc)
+  - [3.1 Lý thuyết](TRANSACTIONAL-OUTBOX-AND-CDC.md#31-lý-thuyết) · [3.2 Nếu venue-registry dùng CDC thì trông thế nào?](TRANSACTIONAL-OUTBOX-AND-CDC.md#32-nếu-venue-registry-dùng-cdc-thì-trông-thế-nào) · [3.3 Kết hợp hay nhất của cả hai: Outbox + CDC relay](TRANSACTIONAL-OUTBOX-AND-CDC.md#33-kết-hợp-hay-nhất-của-cả-hai-outbox--cdc-relay)
 - [4. So sánh nhanh](TRANSACTIONAL-OUTBOX-AND-CDC.md#4-so-sánh-nhanh)
-- [5. Đọc thêm trong repo](TRANSACTIONAL-OUTBOX-AND-CDC.md#5-đọc-thêm-trong-repo)
 
 ### 4. [Mã hóa dữ liệu PII & Search trên dữ liệu mã hóa](PII-ENCRYPTION-THEORY.md)
 
@@ -119,7 +120,7 @@ Lý thuyết Stripe cho backend: nền tảng API, SDK stripe-node, các object 
 
 ### 10. [SendGrid — Lý thuyết cơ bản](SENDGRID-THEORY.md)
 
-Gửi email qua SendGrid: khái niệm nền tảng, setup domain/sender, các SDK Node.js, batch email với `personalizations`, event webhook và chuyện IP cho subuser.
+Gửi email qua SendGrid: khái niệm nền tảng, setup domain/sender, các SDK Node.js, batch email với `personalizations`, event webhook, chuyện IP cho subuser, và luồng hẹn giờ + gửi batch campaign của campaign-v2 (cron one-shot → BullMQ → lô 5.000 / 1.000).
 
 - [1. SendGrid là gì](SENDGRID-THEORY.md#1-sendgrid-là-gì)
 - [2. Ưu điểm so với SMTP tự vận hành](SENDGRID-THEORY.md#2-ưu-điểm-so-với-smtp-tự-vận-hành)
@@ -130,6 +131,8 @@ Gửi email qua SendGrid: khái niệm nền tảng, setup domain/sender, các S
 - [6. Batch email — `personalizations`](SENDGRID-THEORY.md#6-batch-email--personalizations)
 - [7. Event Webhook](SENDGRID-THEORY.md#7-event-webhook)
 - [8. IP cho subuser & warm-up](SENDGRID-THEORY.md#8-ip-cho-subuser--warm-up)
+- [9. Luồng hẹn giờ và gửi batch campaign trong dự án (campaign-v2)](SENDGRID-THEORY.md#9-luồng-hẹn-giờ-và-gửi-batch-campaign-trong-dự-án-campaign-v2)
+  - Sơ đồ tổng quan · Ba tầng: lên lịch / fire / gửi · Ba điểm dễ hiểu nhầm · [Độ bền của job hẹn giờ](SENDGRID-THEORY.md#độ-bền-của-job-hẹn-giờ)
 
 ### 11. [NestJS Fundamental](NESTJS-FUNDAMENTAL.md)
 

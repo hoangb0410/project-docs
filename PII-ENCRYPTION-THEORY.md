@@ -210,23 +210,33 @@ Các quyết định thiết kế đáng học:
 
 Blind index cơ bản chỉ trả lời equality: "hash của từ khóa có bằng hash đã lưu không". Để có **prefix search** (`LIKE 'x%'`), mở rộng tự nhiên là: thay vì hash 1 giá trị, hash **mọi prefix của giá trị**.
 
-Khi lưu giá trị `"Charles"`:
+Cả hai phía (lưu và search) đi qua **cùng một pipeline**: chuẩn hóa → sinh mọi prefix dài ≥3 → hash từng prefix. Ký hiệu `hash(x)` bên dưới = SHA-256 của chuỗi `x`, cắt ngắn còn 16 hex chars (ví dụ `hash("cha") = "9f86d081884c7d65"`).
+
+**Phía ghi** — khi lưu giá trị `"Charles"`:
 
 ```
-chuẩn hóa:   "charles"          (lowercase, trim, bỏ ký tự đặc thù như '+' đầu SĐT)
-prefix ≥3:   ["cha", "char", "charl", "charle", "charles"]
-hash:        mỗi token → SHA-256 → cắt ngắn (ví dụ 16 hex chars)
-lưu:         cột tokens = ["9f86d081884c7d65", "1ba7...", ...]   (mảng, ví dụ JSONB)
+chuẩn hóa:      "charles"          (lowercase, trim, bỏ ký tự đặc thù như '+' đầu SĐT)
+prefix ≥3:      ["cha", "char", "charl", "charle", "charles"]
+hash từng cái:  [hash("cha"), hash("char"), hash("charl"), hash("charle"), hash("charles")]
+lưu vào DB:     cột stored_tokens = ["9f86d081884c7d65", "1ba7...", ...]   (mảng, ví dụ JSONB)
 ```
 
-Khi search `"char"`:
+**Phía đọc** — khi user search `"char"`:
 
 ```
-"char" → chuẩn hóa → prefix hóa → hash → ["h(cha)", "h(char)"]
-WHERE tokens ⊇ {h(cha), h(char)}        -- containment: tokens của row chứa toàn bộ tokens của từ khóa
+chuẩn hóa:      "char"
+prefix ≥3:      ["cha", "char"]
+hash từng cái:  search_tokens = [hash("cha"), hash("char")]
+
+WHERE stored_tokens ⊇ search_tokens
+-- ⊇ = "chứa toàn bộ": mảng stored_tokens của row phải chứa mọi phần tử của search_tokens
 ```
 
-Row khớp ⟺ mảng token của row **chứa toàn bộ** token của từ khóa ⟺ giá trị gốc bắt đầu bằng từ khóa. Đúng ngữ nghĩa `LIKE 'char%'` mà DB không hề biết plaintext. Trên Postgres, phép containment này map thẳng vào toán tử JSONB `@>`.
+Row khớp ⟺ `stored_tokens` của row **chứa toàn bộ** `search_tokens` ⟺ giá trị gốc bắt đầu bằng từ khóa. Row `"Charles"` khớp vì cả `hash("cha")` và `hash("char")` đều nằm trong `stored_tokens`; row `"Chad"` không khớp vì `stored_tokens` của nó là `[hash("cha"), hash("chad")]`, thiếu `hash("char")`. Đúng ngữ nghĩa `LIKE 'char%'` mà DB không hề biết plaintext. Trên Postgres, phép containment này map thẳng vào toán tử JSONB `@>` (toán tử "contains": `A @> B` đúng khi A chứa toàn bộ B, tương đương `A ⊇ B`):
+
+```sql
+WHERE first_name_tokens @> '["9f86d081884c7d65", "1ba7..."]'::jsonb
+```
 
 ### 4.4. Các tham số thiết kế và lý do
 
@@ -234,7 +244,7 @@ Row khớp ⟺ mảng token của row **chứa toàn bộ** token của từ kh�
 - **Cắt ngắn hash** (ví dụ 16 hex = 64 bit): đủ để collision gần như không xảy ra ở quy mô hàng triệu token, tiết kiệm một nửa storage. Collision nếu có chỉ gây **false positive** (thừa row), không bao giờ false negative — chấp nhận được cho search UI.
 - **Cap độ dài prefix** (ví dụ 50 ký tự): chặn giá trị bất thường sinh hàng trăm token.
 - **Từ khóa không index được phải trả về `FALSE` (no match)** — nguyên tắc quan trọng nhất phía đọc, vì có hai cái bẫy đối xứng nhau mà hệ thống nào cũng dễ rơi vào:
-  1. **Bẫy match-tất-cả**: nếu tokenizer trả mảng rỗng mà vẫn emit điều kiện containment, thì containment với tập rỗng (`tokens ⊇ ∅`) đúng với *mọi* row — query match cả bảng.
+  1. **Bẫy match-tất-cả**: nếu tokenizer trả mảng rỗng mà vẫn emit điều kiện containment, thì containment với tập rỗng (`stored_tokens ⊇ ∅`) đúng với *mọi* row — query match cả bảng.
   2. **Bẫy fallback về ciphertext**: nếu "chữa" bằng cách cho từ khóa không index được quay về so sánh trực tiếp trên cột ciphertext, kết quả còn tệ hơn — ciphertext là hex/base64 nên một từ khóa ngắn khớp *tình cờ* với gần như mọi row (chuỗi hex nào chẳng chứa `"d"`), vừa sai kết quả vừa full-table scan. Câu trả lời trung thực cho "từ khóa không index được" là **no match**, không bao giờ là một phép so sánh thay thế trên ciphertext.
 - **Quyết định trên tokens *sau* chuẩn hóa, không phải trên từ khóa thô**: kiểm tra `keyword.length >= 3` là chưa đủ — từ khóa toàn whitespace, hay `"+1"` (bỏ `+` xong còn 1 ký tự) vượt qua kiểm tra độ dài thô nhưng vẫn không sinh được token nào. Điều kiện đúng là `tokens.length > 0` trên kết quả cuối của tokenizer.
 
@@ -303,7 +313,7 @@ prefix ≥3 (cách hiện tại):  ["cha", "char", "charl", "charle", "charles"]
 3-gram (cửa sổ trượt):      ["cha", "har", "arl", "rle", "les"]
 ```
 
-Phía đọc giữ nguyên cơ chế containment: từ khóa `"harl"` → 3-gram hóa → `["har", "arl"]` → `WHERE tokens ⊇ {h(har), h(arl)}`. Row chứa đủ các gram của từ khóa được coi là match — tương đương `LIKE '%harl%'` mà DB không biết plaintext.
+Phía đọc giữ nguyên cơ chế containment: từ khóa `"harl"` → 3-gram hóa → `["har", "arl"]` → `search_tokens = [hash("har"), hash("arl")]` → `WHERE stored_tokens ⊇ search_tokens`. Row chứa đủ các gram của từ khóa được coi là match — tương đương `LIKE '%harl%'` mà DB không biết plaintext.
 
 **Vì sao không khuyến khích** — các hạn chế phải hiểu trước khi cân nhắc:
 
@@ -338,7 +348,7 @@ flowchart TB
     end
 
     subgraph R["Đường đọc"]
-        RW["Rewrite query<br/>WHERE field = ... → WHERE tokens ⊇ tokens(từ khóa)"]
+        RW["Rewrite query<br/>WHERE field = ... → WHERE stored_tokens ⊇ search_tokens"]
         DEC["Decrypt (fail-safe)"]
         RW -->|"kết quả (ciphertext)"| DEC
     end
