@@ -225,3 +225,119 @@ IP mới chưa có lịch sử gửi → ISP mặc định nghi ngờ; phải t�
 - Giữ volume **đều** — dedicated IP "sống" bằng traffic ổn định; gửi burst rồi im lặng làm reputation tụt.
 - IP để nguội quá ~30 ngày không gửi → coi như IP mới, phải warm lại.
 - Theo dõi liên tục: bounce rate nên < 2–5%, spam report < 0.1%; vượt ngưỡng thì dừng tăng volume và làm sạch danh sách trước.
+
+## 9. Luồng hẹn giờ và gửi batch campaign trong dự án (campaign-v2)
+
+Dự án **không** dùng `sendAt` / `batchId` của SendGrid để hẹn giờ. Việc lên lịch và chia lô nằm hoàn toàn phía app, gồm ba tầng:
+
+```mermaid
+flowchart TD
+    A["Staff activate campaign<br/>chọn sendTime"] --> S1
+
+    subgraph T1["Tầng 1 — Lên lịch (in-memory timer, không có cron quét DB)"]
+        S1["scheduleCampaign → createSendCronJob<br/>campaign-v2.service.ts:2552"]
+        S1 -->|"id = campaign_v2_{id}_{uuid}<br/>startDate = sendTime"| S2
+        S2["CronJobService.create<br/>cronjob.service.ts:143<br/>đổi sendTime → cron expression, new CronJob().start()"]
+        S2 -->|"HSET cron-jobs {nextRunTime, data}"| R[("Redis hash cron-jobs<br/>restore lại khi app khởi động<br/>restoreJobsFromRedis :97")]
+        S2 -.->|"cronJobId"| CFG[("campaign_schedule_config.cron_job_id")]
+    end
+
+    S2 -->|"đến sendTime, fire 1 lần rồi stopJob"| F1
+
+    subgraph T2["Tầng 2 — Fire (chạy trên mọi replica, chỉ 1 replica thắng lock)"]
+        F1["sendCampaign<br/>campaign-v2.service.ts:3246"]
+        F1 --> L{"Redis lock<br/>campaign:{id}:send-lock TTL 300s?"}
+        L -->|"trượt → replica khác đang xử lý"| SKIP["bỏ qua"]
+        L -->|"có lock"| F2["executeSendCampaign :3272<br/>status == SCHEDULED?<br/>ước lượng người nhận từ list.size<br/>checkBalanceSufficient"]
+        F2 -->|"thiếu balance / lỗi"| FAIL["markCampaignAsFailed<br/>+ notification, không enqueue"]
+        F2 -->|"hợp lệ"| ENQ["campaignV2Queue.add :3357<br/>payload chỉ có campaignId, listIds,<br/>totalRecipients, channel"]
+    end
+
+    ENQ --> Q[["BullMQ CAMPAIGN_V2_QUEUE<br/>SEND_CAMPAIGN_V2_BATCH<br/>1 campaign = 1 job duy nhất"]]
+
+    Q --> P1
+
+    subgraph T3["Tầng 3 — Gửi (1 job chạy tuần tự hết campaign)"]
+        P1["handleSendCampaignBatch<br/>campaign-v2.queue.ts:51 → sendCampaignBatch :3377"]
+        P1 --> P2["for batchIndex < ceil(total / 5000)<br/>getCustomerBatchFromLists(offset, 5000)"]
+        P2 --> P3["sendEmailsInBatches :3772<br/>cắt lô 5.000 thành từng 1.000 (SEND_MAIL_BULK_SIZE)"]
+        P3 -->|"1 request / 1.000 người nhận<br/>personalizations + substitutions + categories"| SG["SendGrid POST /v3/mail/send"]
+        P3 -->|"còn lô 5.000?"| P2
+        P2 -->|"hết"| P4["finalizeCampaignBatch :3547<br/>status, stats, trừ usage"]
+    end
+
+    SG -.->|"Event Webhook<br/>processed / delivered / bounce..."| WH["src/modules/email-events/<br/>lưu email_events"]
+```
+
+| Tầng        | Cơ chế                                                                                               | Code                                                                     |
+| ----------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Lên lịch    | Cron job **one-shot** (thư viện `cron`), `startDate` = giờ gửi; id lưu ở `campaign_schedule_config.cron_job_id`, job persist trong Redis và restore khi app khởi động | `CronJobService` (`src/modules/cronjob/`), `scheduleCampaign` / `rescheduleCampaign` |
+| Fire        | Handler cron gọi `sendCampaign` → lấy Redis lock `campaign:{id}:send-lock` (TTL 300s) → kiểm tra status `SCHEDULED`, ước lượng người nhận, check balance venue → **một** job BullMQ `SEND_CAMPAIGN_V2_BATCH` | `campaign-v2.service.ts` (`sendCampaign`, `executeSendCampaign`)         |
+| Gửi         | Processor chạy `sendCampaignBatch`: kéo khách theo lô **5.000** từ customer lists, mỗi lô cắt tiếp thành **1.000** (`SEND_MAIL_BULK_SIZE`) = một request `personalizations`; xong toàn bộ mới `finalizeCampaignBatch` | `src/services/bull/campaign-v2.queue.ts`, `sendEmailsInBatches`          |
+
+Ba điểm dễ hiểu nhầm:
+
+1. **Job hẹn giờ được tạo ngay lúc activate**, không phải lúc đến giờ gửi. Không có cron định kỳ nào quét DB tìm campaign đến hạn; mỗi campaign hẹn giờ là một timer riêng, sống liên tục từ lúc activate cho tới `sendTime`.
+2. **Timer đó tồn tại ở hai nơi**: object `CronJob` trong RAM của tiến trình Node (thứ thực sự đếm giờ) và một entry trong Redis hash `cron-jobs` (chỉ để tạo lại timer khi app khởi động). Chi tiết ở tiểu mục "Độ bền của job hẹn giờ" bên dưới.
+3. **1 campaign = 1 job BullMQ**, không phải mỗi khách hàng một job. Khi timer fire, app enqueue đúng một job; processor tự lặp qua toàn bộ danh sách khách theo lô 5.000 rồi 1.000 bên trong job đó.
+
+Lưu ý:
+
+- Queue là **BullMQ** (`QUEUE.CAMPAIGN_V2_QUEUE`), thuộc nhóm legacy — được duy trì, không mở rộng thêm queue mới.
+- Payload job chỉ chứa reference (`campaignId`, `listIds`, `totalRecipients`, `channel`), không chứa danh sách khách.
+- Reschedule = stop cron job cũ + tạo job mới; activate thất bại thì rollback transaction và gỡ cron job vừa tạo.
+- Campaign thường không có cron định kỳ. Cron định kỳ duy nhất là `@Cron(EVERY_HOUR)` cho automation sinh nhật, chạy theo timezone của venue khi giờ local = 0h.
+- Không đủ balance hoặc lỗi trong lúc fire → `markCampaignAsFailed` + notification, không enqueue.
+
+```mermaid
+sequenceDiagram
+    participant U as Staff (activate)
+    participant S as CampaignV2Service
+    participant C as CronJobService (cron + Redis)
+    participant Q as BullMQ CAMPAIGN_V2_QUEUE
+    participant P as Processor
+    participant SG as SendGrid
+
+    U->>S: activate campaign (sendTime)
+    S->>C: create one-shot job {campaignId, startDate = sendTime}
+    C-->>S: cronJobId
+    S->>S: lưu cronJobId vào campaign_schedule_config
+
+    Note over C: đến giờ sendTime
+    C->>S: sendCampaign(campaignId)
+    S->>S: Redis lock + check SCHEDULED + check balance
+    alt không đủ balance / lỗi
+        S->>S: markCampaignAsFailed + notification
+    else hợp lệ
+        S->>Q: add SEND_CAMPAIGN_V2_BATCH {campaignId, listIds, totalRecipients, channel}
+    end
+
+    Q->>P: handleSendCampaignBatch
+    loop mỗi lô 5.000 khách
+        P->>P: getCustomerBatchFromLists(offset)
+        loop mỗi 1.000 người nhận
+            P->>SG: POST /v3/mail/send (personalizations, categories)
+        end
+    end
+    P->>S: finalizeCampaignBatch (status, stats, usage)
+    SG-->>S: Event Webhook (processed/delivered/bounce...)
+```
+
+### Độ bền của job hẹn giờ
+
+Job hẹn giờ tồn tại ở hai lớp với vai trò khác nhau:
+
+- **RAM của tiến trình Node** — object `CronJob` (thư viện `cron`) trong `Map this.jobs` của `CronJobService`. Đây là thứ thực sự đếm giờ và gọi handler.
+- **Redis hash `cron-jobs`** — một entry JSON `{ id, type, nextRunTime, data }` cho mỗi job. Redis không đếm giờ; entry chỉ dùng để `restoreJobsFromRedis` tạo lại timer khi app khởi động.
+
+Sau khi fire, `stopJob` xoá job ở cả hai lớp (`Map.delete` + `HDEL`). Không có bước nào đọc lại từ DB (`campaign_schedule_config.send_time` / `cron_job_id`) để tạo lại job.
+
+| Sự cố                                        | Hành vi hiện tại                                                                                                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App restart / crash, chưa tới `sendTime`     | Restore từ Redis, gửi đúng giờ.                                                                                                                                       |
+| App down **qua** `sendTime`                  | Restore vẫn tạo timer, nhưng cron expression không có năm nên chờ tới ngày giờ đó của năm sau. Campaign kẹt ở `SCHEDULED`, không log, không notification.            |
+| Redis sập tạm thời khi app đang chạy         | Timer trong RAM vẫn fire; `acquireAtomicLock` hoặc `campaignV2Queue.add` (BullMQ cũng trên Redis) fail → `markCampaignAsFailed`, campaign `FAILED`, có notification. |
+| Redis mất dữ liệu (flush, mất persistence)   | Entry mất, không có nguồn phục hồi thứ hai. Campaign kẹt ở `SCHEDULED` với `cron_job_id` trỏ tới job không tồn tại, không notification.                              |
+| Nhiều replica                                | Mỗi replica restore và giữ timer riêng cho cùng campaign; chống gửi trùng dựa vào Redis lock `campaign:{id}:send-lock` trong `sendCampaign`, không phải cơ chế cron. |
+
+Lớp bảo vệ hiện tại nằm ở hạ tầng (ElastiCache có persistence). Về thiết kế, Redis đang là nguồn sự thật duy nhất cho job hẹn giờ, trong khi DB đã có đủ dữ liệu để phục hồi. Hướng vá rẻ nhất nếu cần: một bước restore từ DB lúc khởi động, quét campaign `SCHEDULED` không có entry tương ứng trong `cron-jobs`, tạo lại job cho `sendTime` tương lai và fire ngay hoặc mark failed cho `sendTime` đã qua.

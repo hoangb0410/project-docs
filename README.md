@@ -120,7 +120,7 @@ Lý thuyết Stripe cho backend: nền tảng API, SDK stripe-node, các object 
 
 ### 10. [SendGrid — Lý thuyết cơ bản](SENDGRID-THEORY.md)
 
-Gửi email qua SendGrid: khái niệm nền tảng, setup domain/sender, các SDK Node.js, batch email với `personalizations`, event webhook và chuyện IP cho subuser.
+Gửi email qua SendGrid: khái niệm nền tảng, setup domain/sender, các SDK Node.js, batch email với `personalizations`, event webhook, chuyện IP cho subuser, và luồng hẹn giờ + gửi batch campaign của campaign-v2 (cron one-shot → BullMQ → lô 5.000 / 1.000).
 
 - [1. SendGrid là gì](SENDGRID-THEORY.md#1-sendgrid-là-gì)
 - [2. Ưu điểm so với SMTP tự vận hành](SENDGRID-THEORY.md#2-ưu-điểm-so-với-smtp-tự-vận-hành)
@@ -131,6 +131,8 @@ Gửi email qua SendGrid: khái niệm nền tảng, setup domain/sender, các S
 - [6. Batch email — `personalizations`](SENDGRID-THEORY.md#6-batch-email--personalizations)
 - [7. Event Webhook](SENDGRID-THEORY.md#7-event-webhook)
 - [8. IP cho subuser & warm-up](SENDGRID-THEORY.md#8-ip-cho-subuser--warm-up)
+- [9. Luồng hẹn giờ và gửi batch campaign trong dự án (campaign-v2)](SENDGRID-THEORY.md#9-luồng-hẹn-giờ-và-gửi-batch-campaign-trong-dự-án-campaign-v2)
+  - Sơ đồ tổng quan · Ba tầng: lên lịch / fire / gửi · Ba điểm dễ hiểu nhầm · [Độ bền của job hẹn giờ](SENDGRID-THEORY.md#độ-bền-của-job-hẹn-giờ)
 
 ### 11. [NestJS Fundamental](NESTJS-FUNDAMENTAL.md)
 
