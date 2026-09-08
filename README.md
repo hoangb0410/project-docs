@@ -293,3 +293,10 @@ Bộ câu hỏi phỏng vấn frontend dành cho dev backend: mỗi câu gồm �
 - [Nhóm 6. Web và bảo mật](FE_INTERVIEW_QUESTIONS.md#nhóm-6-web-và-bảo-mật)
 - [Nhóm 7. Tooling và build](FE_INTERVIEW_QUESTIONS.md#nhóm-7-tooling-và-build)
 - [Mẹo trả lời cho dev backend](FE_INTERVIEW_QUESTIONS.md#mẹo-trả-lời-cho-dev-backend)
+
+### 24. [Booking Automation Flow — Automated email cho nollie Bookings](BOOKING-AUTOMATION-FLOW.md)
+
+Luồng automation email khi booking native được tạo/đổi/huỷ: cấu trúc automation campaign (`campaigns_v2` + `automation_campaigns`), bảng trigger và timing mặc định, sơ đồ đánh số từng bước từ API → SQS → worker → SendGrid, cơ chế delayed jobs qua bảng `reservation_automation_jobs` + cron mỗi phút, và idempotency bằng `reservation_automation_send_log`.
+
+- [1. Automation campaign là gì](BOOKING-AUTOMATION-FLOW.md#1-automation-campaign-là-gì) — model, enum trigger, timing mặc định
+- [2. Luồng native nollie Bookings](BOOKING-AUTOMATION-FLOW.md#2-luồng-native-nollie-bookings) — flowchart đánh số 1 → 15 kèm bảng giải thích
