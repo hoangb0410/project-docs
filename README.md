@@ -303,3 +303,18 @@ Luồng automation email khi booking native được tạo/đổi/huỷ: cấu t
 
 - [1. Automation campaign là gì](BOOKING-AUTOMATION-FLOW.md#1-automation-campaign-là-gì) — model, enum trigger, timing mặc định
 - [2. Luồng native nollie Bookings](BOOKING-AUTOMATION-FLOW.md#2-luồng-native-nollie-bookings) — flowchart đánh số 1 → 15 kèm bảng giải thích
+
+### 25. [Event-Driven Architecture và Kafka Streaming](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md)
+
+Lý thuyết EDA ở mức kiến trúc: event so với command, bảy mẫu chuẩn (Event Notification, State Transfer, Event Sourcing, CQRS, Saga, Outbox, Idempotent Consumer), queue so với stream, Kafka ở lớp ứng dụng (schema registry, Connect/Streams/ksqlDB, windowing), quy tắc thiết kế sự kiện và đối chiếu với nollie-api. Phần nội bộ Kafka để ở mục 16.
+
+- [1. Khái niệm nền tảng](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#1-khái-niệm-nền-tảng) — event vs command · ba vai trò · request-driven vs event-driven
+- [2. Các mẫu kiến trúc chuẩn](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#2-các-mẫu-kiến-trúc-chuẩn)
+  - [Event Notification](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#21-event-notification) · [Event-Carried State Transfer](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#22-event-carried-state-transfer) · [Event Sourcing](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#23-event-sourcing) · [CQRS](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#24-cqrs) · [Saga](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#25-saga) · [Transactional Outbox](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#26-transactional-outbox) · [Idempotent Consumer](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#27-idempotent-consumer)
+- [3. Message Queue so với Event Stream](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#3-message-queue-so-với-event-stream)
+- [4. Kafka ở lớp ứng dụng](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#4-kafka-ở-lớp-ứng-dụng-schema-hệ-sinh-thái-stream-processing)
+  - [Schema và tương thích](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#41-schema-và-tương-thích) · [Hệ sinh thái Connect / Streams / ksqlDB](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#42-hệ-sinh-thái) · [Stream processing: stateless và stateful](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#43-stream-processing-stateless-và-stateful)
+- [5. Thiết kế sự kiện: quy tắc thực hành](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#5-thiết-kế-sự-kiện-quy-tắc-thực-hành)
+- [6. Khi nào không nên dùng EDA](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#6-khi-nào-không-nên-dùng-eda)
+- [7. Đối chiếu với nollie-api](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#7-đối-chiếu-với-nollie-api)
+- [Nguồn tham khảo](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#nguồn-tham-khảo) — Fowler · Richardson · Stopford · Kleppmann · Kafka docs
