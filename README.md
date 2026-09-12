@@ -330,3 +330,15 @@ Bottleneck là gì (mắt xích yếu nhất, không chỉ riêng quá tải lư
 - [2. Hai bẫy hay gặp](BOTTLENECK-DIAGNOSIS.md#2-hai-bẫy-hay-gặp)
 - [3. Bài toán mẫu](BOTTLENECK-DIAGNOSIS.md#3-bài-toán-mẫu) — thiếu index · Redis đầy do Bull limiter · OOM do job nặng trên API task · `%term%` Seq Scan · N+1
 - [4. Tóm tắt một dòng cho mỗi bước](BOTTLENECK-DIAGNOSIS.md#4-tóm-tắt-một-dòng-cho-mỗi-bước)
+
+### 27. [Sequelize connection config — từng thông số nghĩa là gì](SEQUELIZE-CONNECTION-CONFIG.md)
+
+Giải thích khối `SequelizeModule.forRootAsync` trong `postgresql.module.ts` theo ba lớp: Sequelize (`autoLoadModels`, `models`, `query.raw`, `logging`, SSL), pool (`max`, `min`, `acquire`, `idle`, `evict` và vòng đời mượn/trả connection), session (`afterConnect` đặt `statement_timeout`, `idle_in_transaction_session_timeout`, `lock_timeout`). Kèm đối chiếu sang MySQL và bảng lợi thế của Postgres so với MySQL.
+
+- [1. Bức tranh tổng thể](SEQUELIZE-CONNECTION-CONFIG.md#1-bức-tranh-tổng-thể)
+- [2. Cấu hình rút gọn](SEQUELIZE-CONNECTION-CONFIG.md#2-cấu-hình-rút-gọn)
+- [3. Lớp Sequelize](SEQUELIZE-CONNECTION-CONFIG.md#3-lớp-sequelize) — `autoLoadModels` không phải tạo bảng · `query.raw` không phải raw SQL
+- [4. Lớp pool](SEQUELIZE-CONNECTION-CONFIG.md#4-lớp-pool) — flowchart mượn/chờ/timeout · `idle` là điều kiện, `evict` là nhịp quét
+- [5. Lớp session — `hooks.afterConnect`](SEQUELIZE-CONNECTION-CONFIG.md#5-lớp-session--hooksafterconnect)
+- [6. Nếu là MySQL thì sao?](SEQUELIZE-CONNECTION-CONFIG.md#6-nếu-là-mysql-thì-sao) — tham số phiên tương đương · đơn vị giây vs ms · SSL, DECIMAL, timezone
+- [7. Postgres có lợi thế gì hơn MySQL?](SEQUELIZE-CONNECTION-CONFIG.md#7-postgres-có-lợi-thế-gì-hơn-mysql) — kiểu dữ liệu · loại index · full-text · constraint · extension · concurrency · query nâng cao · quan sát · tuân thủ chuẩn SQL
