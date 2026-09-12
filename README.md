@@ -202,6 +202,7 @@ Ba kiến trúc API phổ biến: thành phần cấu tạo, luồng giao tiếp
 Kafka là gì, sáu khái niệm cốt lõi, kiến trúc bên trong (replication, write/read path, storage, rebalance, delivery semantics) và khi nào nên/không nên dùng.
 
 - [1. Kafka là gì?](KAFKA-ARCHITECTURE.md#1-kafka-là-gì)
+  - [Kafka phổ biến nhất được dùng cho việc gì?](KAFKA-ARCHITECTURE.md#kafka-phổ-biến-nhất-được-dùng-cho-việc-gì)
 - [2. Sáu khái niệm cốt lõi](KAFKA-ARCHITECTURE.md#2-sáu-khái-niệm-cốt-lõi)
   - [Partition và offset](KAFKA-ARCHITECTURE.md#partition-và-offset--nhìn-tận-mắt) · [Consumer group](KAFKA-ARCHITECTURE.md#consumer-group--chia-việc-và-nhân-bản-luồng-đọc)
 - [3. Kiến trúc bên trong](KAFKA-ARCHITECTURE.md#3-kiến-trúc-bên-trong)
@@ -318,3 +319,14 @@ Lý thuyết EDA ở mức kiến trúc: event so với command, bảy mẫu chu
 - [6. Khi nào không nên dùng EDA](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#6-khi-nào-không-nên-dùng-eda)
 - [7. Đối chiếu với nollie-api](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#7-đối-chiếu-với-nollie-api)
 - [Nguồn tham khảo](EVENT-DRIVEN-ARCHITECTURE-KAFKA.md#nguồn-tham-khảo) — Fowler · Richardson · Stopford · Kleppmann · Kafka docs
+
+### 26. [Xác định bottleneck — quy trình và bài toán mẫu](BOTTLENECK-DIAGNOSIS.md)
+
+Bottleneck là gì (mắt xích yếu nhất, không chỉ riêng quá tải lưu lượng — bảng sáu loại), quy trình bốn bước để tìm đúng chỗ gây chậm trước khi sửa (định lượng → cắt tầng → đào sâu → sửa một chỗ rồi đo lại), hai bẫy hay gặp, và năm bài toán mẫu lấy từ sự cố thật trong repo.
+
+- [0. Bottleneck là gì?](BOTTLENECK-DIAGNOSIS.md#0-bottleneck-là-gì)
+- [1. Quy trình bốn bước](BOTTLENECK-DIAGNOSIS.md#1-quy-trình-bốn-bước)
+  - [Định lượng triệu chứng](BOTTLENECK-DIAGNOSIS.md#bước-1--định-lượng-triệu-chứng) · [Cắt thời gian theo tầng](BOTTLENECK-DIAGNOSIS.md#bước-2--cắt-thời-gian-theo-tầng) · [Đào sâu tầng vừa tìm được](BOTTLENECK-DIAGNOSIS.md#bước-3--đào-sâu-tầng-vừa-tìm-được) · [Sửa một chỗ, đo lại, lặp](BOTTLENECK-DIAGNOSIS.md#bước-4--sửa-một-chỗ-đo-lại-lặp)
+- [2. Hai bẫy hay gặp](BOTTLENECK-DIAGNOSIS.md#2-hai-bẫy-hay-gặp)
+- [3. Bài toán mẫu](BOTTLENECK-DIAGNOSIS.md#3-bài-toán-mẫu) — thiếu index · Redis đầy do Bull limiter · OOM do job nặng trên API task · `%term%` Seq Scan · N+1
+- [4. Tóm tắt một dòng cho mỗi bước](BOTTLENECK-DIAGNOSIS.md#4-tóm-tắt-một-dòng-cho-mỗi-bước)
