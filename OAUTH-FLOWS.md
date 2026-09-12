@@ -15,6 +15,15 @@
 
 Authorization Server và Resource Server thường là hai host khác nhau dù cùng một provider — `accounts.google.com` cấp token, `www.googleapis.com` nhận token. Phân biệt này quan trọng khi đọc tài liệu của provider.
 
+**Client không đồng nghĩa với backend.** Client là bên đăng ký `client_id` với provider và gọi `/token`. Thành phần nào của mình làm việc đó thì là Client; phần còn lại chỉ là User-Agent chở redirect. Cùng một FE, ở token flow nó là Client, ở authorization code nó chỉ là User-Agent.
+
+| Luồng                       | Client                                   | User-Agent                    | Backend nếu không phải Client                              |
+| --------------------------- | ---------------------------------------- | ----------------------------- | ---------------------------------------------------------- |
+| Token flow                  | **FE** — SDK trong browser nhận token     | Chính nó                      | Nhận token từ FE rồi verify — vai trò gần Resource Server  |
+| Authorization code          | **BE**                                   | Browser                       | —                                                          |
+| PKCE, public client         | **SPA / mobile app**                     | Browser tab / in-app browser  | Không tham gia                                             |
+| PKCE, backend (ResDiary)    | **BE**                                   | Browser                       | —                                                          |
+
 ### Bài toán
 
 Backend cần một **bằng chứng danh tính đáng tin từ provider**, rồi từ đó tạo session của riêng mình (ở project này là cookie `access_token` / `refresh_token`).
@@ -27,8 +36,8 @@ Ba luồng dưới đây khác nhau ở đúng hai chỗ: **bằng chứng đi t
 
 | Loại client                             | Giữ được `client_secret`? | Luồng dùng được                                        |
 | --------------------------------------- | ------------------------- | ------------------------------------------------------ |
-| Confidential — backend, server-side web | Có                        | Token flow, Authorization code (+ PKCE tuỳ chọn)        |
-| Public — SPA, mobile, desktop, CLI      | Không                     | Authorization code + PKCE — bắt buộc                    |
+| Confidential — backend, server-side web | Có                        | Token flow, Authorization code — PKCE tuỳ chọn, chồng thêm lên secret |
+| Public — SPA, mobile, desktop, CLI      | Không                     | Authorization code + PKCE — bắt buộc, PKCE thay secret  |
 
 ---
 
@@ -113,35 +122,54 @@ Bằng chứng vẫn là token, nhưng token **chưa bao giờ đi qua browser**
   }
 }}%%
 sequenceDiagram
+    autonumber
+    actor U as User
     participant B as Browser
     participant A as Our API
-    participant P as Google / Facebook
+    participant AS as Authorization Server
+    participant RS as Resource Server
 
-    B->>A: 1. GET /auth/google/redirect
-    Note over A: 2. sinh state, lưu Redis
-    A->>B: 3. 302 → /authorize?…&state
-    B->>P: 4. user consents
-    P->>B: 5. 302 → /callback?code&state
-    B->>A: 6. GET /callback?code&state
-    Note over A: 7. check state
-    A->>P: 8. POST /token — code + client_secret
-    P->>A: 9. access_token + id_token
-    Note over A,P: token thật chỉ đi ở nhánh server-to-server
-    Note over A: 10. find or create user + link
-    A->>B: 11. Set-Cookie + 302 → app
+    U->>B: bấm "Sign in with Google"
+    B->>A: GET /auth/google/redirect
+    Note over A: sinh state random, lưu Redis, TTL ngắn
+    A-->>B: 302 → {AS}/authorize?response_type=code<br/>&client_id&redirect_uri&scope&state
+    B->>AS: GET /authorize
+    AS->>U: đăng nhập + consent — trên domain của provider
+    U->>AS: đồng ý
+    Note over AS: sinh code — one-time, TTL ~30–60s
+    AS-->>B: 302 → {redirect_uri}?code&state
+    B->>A: GET /callback?code&state
+    Note over A: so state với Redis, xoá ngay sau khi dùng
+    alt state không khớp / hết hạn
+        A-->>B: 400 — dừng flow
+    end
+    rect rgba(59,130,246,0.15)
+        Note over A,AS: back-channel — browser không tham gia
+        A->>AS: POST /token<br/>grant_type=authorization_code, code,<br/>redirect_uri, client_id, client_secret
+        Note over AS: code chưa dùng? đúng client? đúng redirect_uri?
+        AS-->>A: access_token, id_token,<br/>refresh_token nếu access_type=offline
+    end
+    Note over A: verify id_token → find or create user + link
+    A-->>B: Set-Cookie + 302 → app
+    opt gọi API provider thay mặt user
+        A->>RS: GET /resource — Bearer access_token
+        RS-->>A: 200
+    end
 ```
 
-1. User bấm một link thường (không cần JS, không cần SDK) trỏ về backend.
-2. Backend sinh `state` — chuỗi random — lưu server-side kèm TTL ngắn.
+1. User bấm một link thường — không cần JS, không cần SDK.
+2. Browser gọi vào backend. Backend sinh `state` random, lưu server-side kèm TTL ngắn.
 3. Backend redirect browser sang `/authorize` của provider, đính kèm `client_id`, `redirect_uri`, `scope`, `state`.
-4. User thấy trang đồng ý **của chính Google/Facebook**, trên domain của họ.
-5. Provider redirect browser về `redirect_uri` đã khai báo trước, đính kèm `code` và `state`.
-6. Browser tự động gọi vào endpoint callback của backend.
-7. Backend so `state` nhận được với cái đã lưu. Không khớp thì dừng.
-8. Backend gọi thẳng token endpoint của provider, gửi `code` + `client_id` + `client_secret` + `redirect_uri`. **Request server-to-server, browser không thấy gì.**
-9. Provider trả `access_token` và `id_token`. Xin `access_type=offline` (Google) thì có thêm `refresh_token`.
-10. Backend tìm hoặc tạo user, gắn liên kết provider — **giống hệt bước 6 của token flow**.
-11. Backend set cookie rồi redirect về frontend.
+4. Browser mở trang provider.
+5. User thấy trang đăng nhập và đồng ý **của chính Google/Facebook**, trên domain của họ.
+6. User đồng ý. Provider sinh `code` dùng một lần, TTL rất ngắn.
+7. Provider redirect browser về `redirect_uri` đã khai báo trước, đính kèm `code` và `state`.
+8. Browser tự động gọi vào callback của backend. Backend so `state` với cái đã lưu, xoá ngay sau khi dùng.
+9. `state` không khớp hoặc hết hạn → dừng, không đổi `code`.
+10. Backend gọi thẳng token endpoint, gửi `code` + `client_id` + `client_secret` + `redirect_uri`. **Request server-to-server, browser không thấy gì.** Provider kiểm tra `code` chưa dùng, đúng client, đúng `redirect_uri`.
+11. Provider trả `access_token` và `id_token`. Xin `access_type=offline` (Google) thì có thêm `refresh_token`.
+12. Backend verify `id_token`, tìm hoặc tạo user, gắn liên kết provider — **giống hệt bước 6 của token flow** — rồi set cookie, redirect về frontend.
+13. – 14. Chỉ khi cần gọi API provider thay mặt user: backend dùng `access_token` gọi Resource Server.
 
 ### Ba cơ chế bảo vệ
 
@@ -157,16 +185,26 @@ sequenceDiagram
 
 ### Ý tưởng
 
-PKCE (Proof Key for Code Exchange, đọc là "pixy") giải bài toán: **làm sao dùng authorization code flow khi không thể giữ `client_secret` bí mật?**
+PKCE (Proof Key for Code Exchange, đọc là "pixy") sinh ra để giải bài toán: **làm sao dùng authorization code flow khi không thể giữ `client_secret` bí mật?** — tình huống của **public client** (SPA, mobile, desktop), nơi code nằm trong tay user, nhúng secret vào là coi như công khai.
 
-Đó là tình huống của **public client** — SPA, mobile, desktop. Code nằm trong tay user, ai cũng mở DevTools hoặc decompile được, nên nhúng secret vào là coi như công khai.
+Nhưng cơ chế không gắn với loại client. Bất kỳ client nào cũng dùng được, và confidential client dùng **kèm** `client_secret` thì được thêm một lớp — OAuth 2.1 khuyến nghị PKCE cho mọi client.
 
-PKCE thay `client_secret` — bí mật **cố định, dùng mãi** — bằng một cặp bí mật **sinh mới mỗi lần đăng nhập**:
+PKCE bổ sung cho `client_secret` — bí mật **cố định, dùng mãi** — một cặp bí mật **sinh mới mỗi lần đăng nhập**:
 
-| Giá trị          | Cách sinh                            | Ai thấy                                              |
-| ---------------- | ------------------------------------ | ---------------------------------------------------- |
-| `code_verifier`  | Chuỗi random 43–128 ký tự            | Chỉ app — giữ trong memory, gửi duy nhất ở bước đổi token |
-| `code_challenge` | `BASE64URL(SHA256(code_verifier))`   | Công khai — đi qua URL `/authorize`                   |
+| Giá trị          | Cách sinh                            | Ai thấy                                                                  |
+| ---------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| `code_verifier`  | Chuỗi random 43–128 ký tự            | Chỉ client — gửi duy nhất ở bước đổi token                                |
+| `code_challenge` | `BASE64URL(SHA256(code_verifier))`   | Công khai — đi qua URL `/authorize`                                       |
+
+Ai sinh và giữ `code_verifier` tuỳ client là gì:
+
+| Client                    | Sinh verifier ở đâu | Giữ ở đâu                                    | Lúc đổi code gửi                        |
+| ------------------------- | ------------------- | -------------------------------------------- | --------------------------------------- |
+| SPA                       | Trong browser       | Memory / session storage                     | `code_verifier`                         |
+| Mobile / desktop          | Trong app           | Memory                                       | `code_verifier`                         |
+| Backend (confidential)    | Trên server         | Server-side, key theo `state` (Redis, TTL ngắn) | `code_verifier` **+** `client_secret` |
+
+Ví dụ ngay trong nollie-api: kết nối ResDiary — backend sinh verifier, lưu Redis `res-diary:code_verifier:{state}` TTL 5 phút, callback đọc lại verifier theo `state`, gọi `/oauth/token` với Basic auth `client_id:client_secret` **và** `code_verifier`.
 
 ### Luồng
 
@@ -180,36 +218,64 @@ PKCE thay `client_secret` — bí mật **cố định, dùng mãi** — bằng 
   }
 }}%%
 sequenceDiagram
-    participant A as SPA / Mobile app
-    participant P as Google / Facebook
+    autonumber
+    actor U as User
+    participant C as Client<br/>(SPA / mobile / backend)
+    participant B as User-Agent<br/>(browser tab / in-app browser)
+    participant AS as Authorization Server
+    participant RS as Resource Server
 
-    Note over A: 1. sinh code_verifier (43–128 ký tự)
-    Note over A: 2. code_challenge = BASE64URL(SHA256(verifier))
-    A->>P: 3. /authorize?…&code_challenge&code_challenge_method=S256
-    P->>A: 4. user consents → redirect kèm code
-    A->>P: 5. POST /token — code + code_verifier, KHÔNG có secret
-    Note over P: 6. SHA256(verifier) có khớp challenge đã lưu?
-    P->>A: 7. access_token + id_token
+    U->>C: bấm "Sign in" / "Connect"
+    rect rgba(34,197,94,0.15)
+        Note over C: code_verifier = random 43–128 ký tự
+        Note over C: code_challenge = BASE64URL(SHA256(code_verifier))
+        Note over C: giữ code_verifier + state —<br/>app: memory / session storage<br/>backend: Redis key theo state, TTL ngắn
+    end
+    C->>B: mở {AS}/authorize?response_type=code&client_id<br/>&redirect_uri&scope&state<br/>&code_challenge&code_challenge_method=S256
+    B->>AS: GET /authorize
+    Note over AS: lưu code_challenge gắn với phiên authorize này
+    AS->>U: đăng nhập + consent
+    U->>AS: đồng ý
+    Note over AS: sinh code, gắn với code_challenge đã lưu
+    AS-->>B: 302 → {redirect_uri}?code&state
+    B->>C: callback / deep link — code, state
+    Note over C: so state, lấy lại code_verifier theo state
+    rect rgba(34,197,94,0.15)
+        Note over C,AS: đổi code — code_verifier thay hoặc kèm client_secret
+        C->>AS: POST /token<br/>grant_type=authorization_code, code,<br/>redirect_uri, client_id, code_verifier<br/>[+ client_secret nếu là confidential client]
+        Note over AS: BASE64URL(SHA256(code_verifier)) == code_challenge đã lưu?
+        alt không khớp — code bị chặn, kẻ tấn công không có verifier
+            AS-->>C: 400 invalid_grant
+        end
+        AS-->>C: access_token, id_token, refresh_token
+    end
+    Note over C: xoá code_verifier — dùng một lần
+    C->>RS: GET /resource — Bearer access_token
+    RS-->>C: 200
 ```
 
-1. App sinh `code_verifier` random.
-2. Hash ra `code_challenge`. Verifier **không** gửi ở bước này.
-3. Redirect sang provider kèm `code_challenge` và `code_challenge_method=S256`. Provider lưu challenge, gắn với request này.
-4. User đồng ý, provider redirect về kèm `code`.
-5. App đổi `code`, lần này gửi `code_verifier` **gốc** — thứ chưa từng xuất hiện trên đường truyền. Public client thuần không gửi secret; riêng client loại "Desktop app" của Google vẫn có secret và vẫn gửi kèm.
-6. Provider tự hash verifier và so với challenge đã lưu. Khớp mới cấp token.
-7. Token được cấp.
+1. User bấm nút. Client sinh `code_verifier` random, hash ra `code_challenge`, giữ verifier và `state` — app giữ trong memory, backend lưu server-side key theo `state`. Verifier **không** gửi đi ở bước này.
+2. Client mở `/authorize` của provider qua trình duyệt — SPA/backend redirect tab hiện tại, mobile dùng in-app browser (`ASWebAuthenticationSession` / Custom Tabs) — kèm `code_challenge` và `code_challenge_method=S256`.
+3. Provider nhận request, lưu `code_challenge` gắn với phiên authorize này.
+4. User thấy trang đăng nhập và đồng ý của provider.
+5. User đồng ý. Provider sinh `code`, gắn với `code_challenge` đã lưu.
+6. Provider redirect về `redirect_uri` kèm `code` và `state`.
+7. Trình duyệt chuyển `code` + `state` về client — redirect với SPA, deep link / custom scheme với mobile, gọi thẳng endpoint callback với backend. Client so `state` và lấy lại `code_verifier` tương ứng.
+8. Client đổi `code`, lần này gửi `code_verifier` **gốc** — thứ chưa từng xuất hiện trên đường truyền. Public client không có secret để gửi; confidential client gửi kèm `client_secret` (Google cho chồng cả hai; Facebook chọn một trong hai — xem bảng dưới).
+9. Provider hash verifier, so với challenge đã lưu. Không khớp → `invalid_grant`, `code` bị huỷ.
+10. Khớp → cấp token. Client xoá `code_verifier`, không dùng lại.
+11. – 12. Client dùng `access_token` gọi Resource Server.
 
 ### Vì sao thay được `client_secret`
 
-Kẻ tấn công chặn được `code` ở bước 4 (qua log, deep link bị đăng ký trùng trên mobile, referrer) vẫn **không đổi được token**, vì không có `code_verifier` — nó chưa bao giờ rời khỏi app.
+Kẻ tấn công chặn được `code` ở bước 6–7 (qua log, deep link bị đăng ký trùng trên mobile, referrer) vẫn **không đổi được token**, vì không có `code_verifier` — nó chưa bao giờ rời khỏi app.
 
 Khác biệt cốt lõi: secret bị lộ một lần là lộ vĩnh viễn. Verifier chỉ dùng cho **một** lần login, lộ cũng vô dụng.
 
 | `code_challenge_method` | Ý nghĩa                              | Dùng không?                                                        |
 | ----------------------- | ------------------------------------ | ------------------------------------------------------------------ |
 | `S256`                  | `challenge = BASE64URL(SHA256(verifier))` | Luôn                                                          |
-| `plain`                 | `challenge = verifier`               | Không — verifier lộ ngay ở bước 3, chỉ dành cho nền tảng không hash được |
+| `plain`                 | `challenge = verifier`               | Không — verifier lộ ngay ở bước 2, chỉ dành cho nền tảng không hash được |
 
 ### PKCE không thay thế `state`
 
@@ -238,13 +304,14 @@ Với Facebook, PKCE là **phương án thay thế** cho `client_secret`, đúng
 
 ### Khi nào project này cần tới nó
 
-Hiện tại **không cần** — backend giữ được `client_secret`, tức confidential client, authorization code thường đã đủ.
+Với đăng nhập Google/Facebook hiện tại **không bắt buộc** — backend giữ được `client_secret`, authorization code thường đã đủ. Nhưng đã có chỗ dùng: kết nối ResDiary chạy PKCE từ backend.
 
-| Tình huống                                              | Cần PKCE? |
-| ------------------------------------------------------- | --------- |
-| Mobile app gọi trực tiếp provider, không qua backend     | Bắt buộc  |
-| SPA thuần, không backend nào giữ secret                  | Bắt buộc  |
-| Siết thêm một lớp cho luồng backend hiện có              | Tuỳ chọn — chỉ Google cho chồng |
+| Tình huống                                              | Cần PKCE?                                   |
+| ------------------------------------------------------- | ------------------------------------------- |
+| Mobile app gọi trực tiếp provider, không qua backend     | Bắt buộc                                    |
+| SPA thuần, không backend nào giữ secret                  | Bắt buộc                                    |
+| Provider yêu cầu hoặc khuyến nghị PKCE (ResDiary)        | Làm theo provider, dù backend là confidential |
+| Siết thêm một lớp cho luồng backend hiện có              | Tuỳ chọn — Google cho chồng, Facebook thì chọn một |
 
 ---
 
@@ -290,19 +357,19 @@ sequenceDiagram
 
 |                                  | Token flow                                                                                                  | Authorization code                                              | Auth code + PKCE                                              |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
-| Token provider trong browser     | Có — XSS lấy được                                                                                           | Không, chỉ `code` dùng 1 lần — XSS không lấy được               | Có (app chính là client)                                      |
-| Bí mật để đổi / verify token     | Không có — backend tự verify `aud` / `app_id`                                                               | `client_secret` cố định                                         | `code_verifier` sinh mới mỗi lần login                        |
-| Cần `client_secret`              | Google: không. Facebook: cho `debug_token`                                                                  | Bắt buộc cả hai                                                 | Không                                                         |
+| Token provider trong browser     | Có — XSS lấy được                                                                                           | Không, chỉ `code` dùng 1 lần — XSS không lấy được               | Public client: có, app chính là client. Backend client: không |
+| Bí mật để đổi / verify token     | Không có — backend tự verify `aud` / `app_id`                                                               | `client_secret` cố định                                         | `code_verifier` sinh mới mỗi lần login, confidential client kèm thêm `client_secret` |
+| Cần `client_secret`              | Google: không. Facebook: cho `debug_token`                                                                  | Bắt buộc cả hai                                                 | Public: không. Confidential: gửi kèm                          |
 | SDK provider trong browser       | Bắt buộc                                                                                                    | Không                                                           | Không                                                         |
 | Bị ad blocker chặn               | Có — `connect.facebook.net` nằm trong hầu hết blocklist, SDK không load thì nút **im lặng không làm gì**    | Không                                                           | Không                                                         |
 | JS bên thứ ba / CSP              | CSP phải lỏng hơn, thêm bề mặt tracking                                                                     | Không load gì từ Google/Meta, CSP siết được                     | Như authorization code                                        |
 | Redirect                         | Không — popup, SPA không mất state                                                                          | Full-page, 2 vòng — SPA phải tự lưu/phục hồi state              | Full-page, 2 vòng                                             |
 | Chống CSRF                       | SDK tự xử lý                                                                                                | Tự làm: `state`                                                 | Tự làm: `state`                                               |
 | Refresh token của provider       | Không. Google chỉ trả `id_token`, không gọi được API. Facebook đổi được sang [long-lived ~60 ngày](https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived) qua `fb_exchange_token` (cần app secret), hết hạn phải login lại | Có, với `access_type=offline` — gọi được API provider về sau | Có                                     |
-| Endpoint backend cần thêm        | 0                                                                                                           | +2 mỗi provider                                                 | 0 nếu app gọi thẳng provider                                  |
+| Endpoint backend cần thêm        | 0                                                                                                           | +2 mỗi provider                                                 | App gọi thẳng provider: 0. Backend làm client: +2 như authorization code |
 | Chỗ dễ làm sai                   | Quên verify `aud` / `app_id` — hổng nghiêm trọng, không có gì nhắc                                          | `state` làm sai thành lỗ bảo mật; `redirect_uri` phải khai cho **từng** môi trường, preview deploy domain động khá mệt | Verifier không đủ random, mất qua vòng redirect, hash sai; Facebook phải chuyển sang luồng OIDC riêng; tài liệu cả hai provider nằm lệch trang chính |
 | Vị thế trong chuẩn               | Luồng xác thực chính thức của hai provider, không phải implicit grant                                        | Chuẩn chung, dùng lại được cho mobile/native                    | OAuth 2.1 khuyến nghị mặc định cho public client              |
-| **Cần thiết** cho                | Web có backend                                                                                              | Web có backend                                                  | SPA / mobile không giữ được secret                            |
+| **Cần thiết** cho                | Web có backend                                                                                              | Web có backend                                                  | Bắt buộc cho SPA / mobile không giữ được secret; tuỳ chọn cho backend, hoặc khi provider yêu cầu |
 
 ### Chọn cái nào
 
