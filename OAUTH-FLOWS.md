@@ -24,6 +24,21 @@ Authorization Server và Resource Server thường là hai host khác nhau dù c
 | PKCE, public client         | **SPA / mobile app**                     | Browser tab / in-app browser  | Không tham gia                                             |
 | PKCE, backend (ResDiary)    | **BE**                                   | Browser                       | —                                                          |
 
+### Bước 0: đăng ký app với provider
+
+Mọi luồng đều bắt đầu **trước** sequence — app phải được đăng ký ở console của provider (Google Cloud Console, Meta for Developers, Square Developer Dashboard, ResDiary partner portal). Không có bước này thì không có `client_id`, và `/authorize` không biết user đang uỷ quyền cho ai.
+
+| Khai báo       | Dùng để                                                                     |
+| -------------- | --------------------------------------------------------------------------- |
+| Tên, logo      | Hiện trên màn hình consent                                                  |
+| Loại client    | Quyết định có được cấp `client_secret` không, có bắt PKCE không              |
+| `redirect_uri` | Provider chỉ trả `code` về đúng URI này                                      |
+| Scope          | Nhiều provider bắt review từng scope trước khi cho app production dùng       |
+
+Nhận về `client_id` (công khai) và, chỉ với confidential client, `client_secret`. Trong nollie-api chúng nằm ở env: `CLIENT_ID` / `CLIENT_SECRET` (Square), `CLIENT_ID_RES` / `CLIENT_SECRET_RES` / `REDIRECT_URI_RES` (ResDiary).
+
+User uỷ quyền cho **`client_id`**, không phải cho server hay domain — đổi `client_id` là mọi token đã cấp vô hiệu, user phải connect lại.
+
 ### Bài toán
 
 Backend cần một **bằng chứng danh tính đáng tin từ provider**, rồi từ đó tạo session của riêng mình (ở project này là cookie `access_token` / `refresh_token`).
