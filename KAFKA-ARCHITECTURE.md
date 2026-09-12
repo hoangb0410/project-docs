@@ -25,6 +25,20 @@ flowchart LR
 
 > **Nắm ý chính:** producer *ghi* sự kiện vào topic, Kafka *giữ* sự kiện lại theo thứ tự, consumer *tự đọc* theo nhịp của mình. Ba vai trò này không cần biết đến nhau — đó là giá trị lớn nhất của Kafka.
 
+### Kafka phổ biến nhất được dùng cho việc gì?
+
+Tất cả đều xuất phát từ cùng một tính chất: sự kiện được **giữ lại, có thứ tự, nhiều bên đọc cùng lúc**.
+
+| Tác vụ | Ví dụ đời thường |
+|---|---|
+| **Fan-out một sự kiện cho nhiều hệ thống** | Một đơn hàng được tạo — kho, thanh toán, email, analytics cùng nhận, không bên nào phải gọi bên nào |
+| **Gom log và metric từ khắp nơi về một chỗ** | Hàng trăm server đẩy log vào Kafka; Elastic, Datadog, S3 mỗi bên tự đọc ra |
+| **Pipeline dữ liệu và CDC (Change Data Capture)** | Mọi thay đổi trong Postgres được stream sang data warehouse gần thời gian thực để làm báo cáo |
+| **Xử lý stream thời gian thực** | Phát hiện gian lận, đếm lượt xem, tính chỉ số trượt theo phút ngay khi dữ liệu đang chảy |
+| **Replay và event sourcing** | Consumer mới, hoặc consumer vừa sửa bug, đọc lại toàn bộ lịch sử từ đầu để dựng lại state |
+
+Kafka **không** phù hợp cho job nền kiểu "gửi email này, retry 3 lần rồi vào DLQ" — đó là việc của queue (xem mục 5). Chi tiết từng nhóm tác vụ ở mục 4.
+
 ---
 
 ## 2. Sáu khái niệm cốt lõi
